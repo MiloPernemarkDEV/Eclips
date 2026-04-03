@@ -173,9 +173,7 @@ private:
 	VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 	std::vector<VkDescriptorSet> descriptorSets;
 
-	VkBuffer stagingBuffer;
-	VkDeviceMemory stagingBufferMemory;
-
+	// Pixels within an image object are known as texels
 	VkImage textureImage;
 	VkDeviceMemory textureImageMemory;
 
@@ -233,6 +231,12 @@ private:
 		createSyncObjects();
 	}
 
+	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout) {
+		VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+
+		endSingleTimeCommands(commandBuffer);
+ 	}
+
 	VkCommandBuffer beginSingleTimeCommands()
 	{
 		VkCommandBufferAllocateInfo allocInfo = {};
@@ -273,19 +277,26 @@ private:
 		VkDeviceSize imageSize = texWidth * texHeight * 4;
 
 		if (!pixels) {
-			throw std::runtime_error("failed to load texture image!");
+			throw std::runtime_error("createTextureImage() failed to load texture image!");
 		}
-
 
 		VkBuffer stagingBuffer;
 		VkDeviceMemory stagingBufferMemory;
+
+		// Create CPU visible staging buffer that holds raw RGBA pixel data before copying it to a GPU image
+		// VK_MEMORY_HOST_VISIBLE_BIT = cpu can access the memory  
+		// VK_MEMORY_PROPERTY_HOST_COHERENT_BIT = No manual syncing needed 
+		// VK_BUFFER_USAGE_TRANSFER_SRC_BIT = makes it usable as a transfer source so we can copy it to an image later on
 		createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
 		void* data;
+
+		// we directly copy the pixel data to the buffer
 		vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
 		memcpy(data, pixels, static_cast<size_t>(imageSize));
 		vkUnmapMemory(device, stagingBufferMemory);
 
+		// As we have copied the original pixel data to the buffer we can free it now 
 		stbi_image_free(pixels);
 
 		createImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImage, textureImageMemory);
