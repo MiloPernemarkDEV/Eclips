@@ -174,14 +174,11 @@ private:
 	std::vector<VkDescriptorSet> descriptorSets;
 
 	// Pixels within an image object are known as texels
-	VkImage textureImage;
-	VkDeviceMemory textureImageMemory;
+	VkImage textureImage = VK_NULL_HANDLE;
+	VkDeviceMemory textureImageMemory = VK_NULL_HANDLE;	
 
 	bool m_framebufferResized = false;
 
-	/**
-		* @brief Initializes window creation. Needs to be refactored out
-		*/
 	void initWindow() {
 		glfwInit();
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -205,9 +202,6 @@ private:
 		app->m_framebufferResized = true;
 	}
 
-	/**
-		* @brief Initializes Helicon's graphics renderer
-		*/
 	void initVulkan() {
 		createInstance();
 		setupDebugMessenger();
@@ -1436,4 +1430,3 @@ catch (const std::exception& e) {
 
 return EXIT_SUCCESS;
 }
-
