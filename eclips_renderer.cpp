@@ -26,7 +26,6 @@
 #include <array>
 #include <fstream>
 
-
 constexpr uint32_t WIDTH = 1400;
 constexpr uint32_t HEIGHT = 1080;
 
@@ -116,7 +115,7 @@ const std::vector<uint16_t> indices = {
 	0, 1, 2, 2, 3, 0
 };
 
-class HcTestRenderer {
+class eclips_renderer {
 public:
 	void run() {
 		initWindow();
@@ -126,51 +125,49 @@ public:
 	}
 
 private:
+	// Initialization
 	GLFWwindow* m_window = nullptr;
 	VkInstance m_instance = VK_NULL_HANDLE;
 	VkDebugUtilsMessengerEXT m_debugMessenger = VK_NULL_HANDLE;
 	VkSurfaceKHR m_surface = VK_NULL_HANDLE;
 
+	// Device & Queues 
 	VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
 	VkDevice device = VK_NULL_HANDLE;
 	VkQueue m_graphicsQueue = VK_NULL_HANDLE;
 	VkQueue m_presentQueue = VK_NULL_HANDLE;
 
-	VkSwapchainKHR m_swapChain = VK_NULL_HANDLE;
+	// Swap Chain
+	VkSwapchainKHR m_swapChain = VK_NULL_HANDLE;	
 	std::vector<VkImage> m_swapChainImages;
 	VkFormat m_swapChainImageFormat = {};
 	VkExtent2D m_swapChainExtent = {};
-
 	std::vector<VkImageView> m_swapChainImageViews;
-
 	std::vector<VkFramebuffer> m_swapChainFramebuffers;
 	VkPipeline m_graphicsPipeline = VK_NULL_HANDLE;
 	VkRenderPass m_renderPass = VK_NULL_HANDLE;
 	VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
 	VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
 
-
+	//  Synchronization
 	VkCommandPool m_commandPool = VK_NULL_HANDLE;
 	std::vector<VkCommandBuffer> m_commandBuffers;
 
 	std::vector<VkSemaphore> m_imageAvailableSemaphores;
 	std::vector<VkSemaphore> m_renderFinishedSemaphores;
 	std::vector<VkFence> m_inFlightFences;
-	uint32_t m_currentFrame = 0;
 
+	// Buffers and Images 
+	uint32_t m_currentFrame = 0;
 	VkBuffer m_vertexBuffer = VK_NULL_HANDLE;
 	VkDeviceMemory m_vertexBufferMemory = VK_NULL_HANDLE;
 	VkBuffer indexBuffer = VK_NULL_HANDLE;
 	VkDeviceMemory indexBufferMemory = VK_NULL_HANDLE;
-
 	std::vector<VkBuffer> uniformBuffers;
 	std::vector<VkDeviceMemory> uniformBuffersMemory;
 	std::vector<void*> uniformBuffersMapped;
-
 	VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 	std::vector<VkDescriptorSet> descriptorSets;
-
-	// Pixels within an image object are known as texels
 	VkImage textureImage = VK_NULL_HANDLE;
 	VkDeviceMemory textureImageMemory = VK_NULL_HANDLE;	
 
@@ -195,7 +192,7 @@ private:
 	}
 		
 	static void framebufferResizeCallback(GLFWwindow* window, int width, int height) {
-		auto app = reinterpret_cast<HcTestRenderer*>(glfwGetWindowUserPointer(window));
+		auto app = reinterpret_cast<eclips_renderer*>(glfwGetWindowUserPointer(window));
 		app->m_framebufferResized = true;
 	}
 
@@ -224,6 +221,42 @@ private:
 
 	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout) {
 		VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+
+		// Modern GPUs and CPUs don’t always write directly to main memory 
+		// Writes may stay L1/L2 and not be immediately visible to other GPU operations.
+		// Without a memory barrier, the GPU might read from an image before
+		// the previous write operation is finished and visible.
+		// A memory barrier ensures that:
+		// Previous writes are complete, the written data is made visible,
+		// future reads see the latest data 
+		VkImageMemoryBarrier barrier{};
+		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barrier.oldLayout = oldLayout;
+		barrier.newLayout = newLayout;
+		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+
+		barrier.image = image;
+		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		barrier.subresourceRange.baseMipLevel = 0;
+		barrier.subresourceRange.levelCount = 1;
+		barrier.subresourceRange.baseArrayLayer = 0;
+		barrier.subresourceRange.layerCount = 1;
+
+		barrier.srcAccessMask = 0; // TODO
+		barrier.dstAccessMask = 0; // TODO
+
+		// Pipeline barriers specify what data or which stages of the rendering pipeline to wait for and which
+		// stages to block until other specified stages in prevous commands are completed
+		// Pipeline barriers a gpu only
+		vkCmdPipelineBarrier(
+			commandBuffer,
+			0 /* TODO */, 0 /* TODO */,
+			0,
+			0, nullptr,
+			0, nullptr,
+			1, &barrier
+		);	
 
 		endSingleTimeCommands(commandBuffer);
  	}
@@ -1259,8 +1292,6 @@ private:
 		return extensions;
 	}
 
-
-
 	void drawFrame() {
 		vkWaitForFences(device, 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
 
@@ -1417,7 +1448,7 @@ private:
 
 
 int main() {
-HcTestRenderer test_renderer;
+eclips_renderer test_renderer;
 
 try { test_renderer.run(); }
 catch (const std::exception& e) {
