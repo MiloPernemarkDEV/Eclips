@@ -116,9 +116,6 @@ const std::vector<uint16_t> indices = {
 	0, 1, 2, 2, 3, 0
 };
 
-/**
-	* @brief Helicon Game Engine renderer made with the Vulkan graphics API, first prototype
-	*/
 class HcTestRenderer {
 public:
 	void run() {
