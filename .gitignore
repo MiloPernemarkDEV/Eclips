@@ -424,3 +424,7 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Don't ignore 3D models in the assets folder
+!assets/**/*.obj
+!models/**/*.obj
