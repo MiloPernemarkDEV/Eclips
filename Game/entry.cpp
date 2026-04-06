@@ -2,7 +2,7 @@
 #include <memory>
 
 int main() {
-	std::unique_ptr<eclips_renderer> renderer = std::make_unique<eclips_renderer>();	
+	std::unique_ptr<eclips_renderer> renderer = std::make_unique<eclips_renderer>();
 
 	try { renderer->run(); }
 	catch (const std::exception& e) {

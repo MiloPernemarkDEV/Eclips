@@ -1,0 +1,8 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="Eclips/Eclips.vcxproj" Id="07956062-dc1c-4d7f-be76-7bb4991eb99e" />
+  <Project Path="Game/Game.vcxproj" Id="1ecd63fb-9038-4ab0-bd5e-cb08eec7d4bb" />
+</Solution>
