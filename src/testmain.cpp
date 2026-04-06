@@ -1,9 +1,10 @@
 #include "eclips_renderer.h"
+#include <memory>
 
 int main() {
-	eclips_renderer test_renderer;
+	std::unique_ptr<eclips_renderer> renderer = std::make_unique<eclips_renderer>();	
 
-	try { test_renderer.run(); }
+	try { renderer->run(); }
 	catch (const std::exception& e) {
 		std::cerr << e.what() << '\n';
 		return EXIT_FAILURE;

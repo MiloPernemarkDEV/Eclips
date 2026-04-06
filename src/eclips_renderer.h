@@ -26,8 +26,8 @@
 #include <array>
 #include <fstream>
 
-constexpr uint32_t WIDTH = 1400;
-constexpr uint32_t HEIGHT = 1080;
+constexpr uint32_t WIDTH = 1280;
+constexpr uint32_t HEIGHT = 720;
 
 constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -71,10 +71,10 @@ struct Vertex
 {
 	glm::vec2 pos;
 	glm::vec3 color;
+	glm::vec2 texCoord;
 
-	/**
-		* Describes how vertex data is laid out in memory so that it can be provided to the vertex shader
-		*/
+	
+	// Describes how vertex data is laid out in memory so that it can be provided to the vertex shader	
 	static VkVertexInputBindingDescription getBindingDescription()
 	{
 		VkVertexInputBindingDescription binding_description = {};
@@ -84,31 +84,35 @@ struct Vertex
 		return binding_description;
 	}
 
-	/**
-		* Tells vulkan how to read each attribute (position, color, etc.) from a vertex.
-		*/
-	static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions()
+	
+	// Tells vulkan how to read each attribute (position, color, etc.) from a vertex.
+	static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions()
 	{
-		std::array<VkVertexInputAttributeDescription, 2> attribute_descriptions = {};
-		attribute_descriptions[0].binding = 0;
-		attribute_descriptions[0].location = 0;
-		attribute_descriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
-		attribute_descriptions[0].offset = offsetof(Vertex, pos);
+		std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions = {};
+		attributeDescriptions[0].binding = 0;
+		attributeDescriptions[0].location = 0;
+		attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+		attributeDescriptions[0].offset = offsetof(Vertex, pos);
 
-		attribute_descriptions[1].binding = 0;
-		attribute_descriptions[1].location = 1;
-		attribute_descriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-		attribute_descriptions[1].offset = offsetof(Vertex, color);
+		attributeDescriptions[1].binding = 0;
+		attributeDescriptions[1].location = 1;
+		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+		attributeDescriptions[1].offset = offsetof(Vertex, color);
 
-		return attribute_descriptions;
+		attributeDescriptions[2].binding = 0;
+		attributeDescriptions[2].location = 2;
+		attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
+		attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
+
+		return attributeDescriptions;
 	}
 };
 
 const std::vector<Vertex> vertices = {
-	{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-	{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-	{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-	{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+	{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
+	{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+	{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+	{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
 };
 
 const std::vector<uint16_t> indices = {
@@ -126,23 +130,23 @@ public:
 
 private:
 	// Initialization
-	GLFWwindow* m_window = nullptr;
-	VkInstance m_instance = VK_NULL_HANDLE;
-	VkDebugUtilsMessengerEXT m_debugMessenger = VK_NULL_HANDLE;
-	VkSurfaceKHR m_surface = VK_NULL_HANDLE;
+	GLFWwindow* window = nullptr;
+	VkInstance instance = VK_NULL_HANDLE;
+	VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
+	VkSurfaceKHR surface = VK_NULL_HANDLE;
 
 	// Device & Queues 
-	VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
+	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
 	VkDevice device = VK_NULL_HANDLE;
-	VkQueue m_graphicsQueue = VK_NULL_HANDLE;
-	VkQueue m_presentQueue = VK_NULL_HANDLE;
+	VkQueue graphicsQueue = VK_NULL_HANDLE;
+	VkQueue presentQueue = VK_NULL_HANDLE;
 
 	// Swap Chain
 	VkSwapchainKHR m_swapChain = VK_NULL_HANDLE;
-	std::vector<VkImage> m_swapChainImages;
-	VkFormat m_swapChainImageFormat = {};
+	std::vector<VkImage> swapChainImages;
+	VkFormat swapChainImageFormat = {};
 	VkExtent2D m_swapChainExtent = {};
-	std::vector<VkImageView> m_swapChainImageViews;
+	std::vector<VkImageView> swapChainImageViews;
 	std::vector<VkFramebuffer> m_swapChainFramebuffers;
 	VkPipeline m_graphicsPipeline = VK_NULL_HANDLE;
 	VkRenderPass m_renderPass = VK_NULL_HANDLE;
@@ -168,8 +172,13 @@ private:
 	std::vector<void*> uniformBuffersMapped;
 	VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 	std::vector<VkDescriptorSet> descriptorSets;
+
+	// Textures
 	VkImage textureImage = VK_NULL_HANDLE;
 	VkDeviceMemory textureImageMemory = VK_NULL_HANDLE;
+	VkImageView textureImageView = VK_NULL_HANDLE;
+	VkSampler textureSampler = VK_NULL_HANDLE;
+
 
 	bool m_framebufferResized = false;
 
@@ -181,6 +190,10 @@ private:
 
 	void initVulkan();
 
+	void createTextureSampler();
+	VkImageView createImageView(VkImage image, VkFormat format);
+	void createTextureImageView();
+	void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);	
 	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
 
 	VkCommandBuffer beginSingleTimeCommands();
