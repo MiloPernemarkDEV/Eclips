@@ -31,27 +31,18 @@
 
 #include <unordered_map>
 
-constexpr uint32_t WIDTH = 1280;
-constexpr uint32_t HEIGHT = 720;
+#include "EclipsInstance.h"
+#include "EclipsDebug.h"
+#include "EclipsSurface.h"
 
 constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 
 const std::string MODEL_PATH_VIKING_ROOM = "assets/viking_room.obj";
 const std::string TEXTURE_PATH = "textures/viking_room.png";
 
-const std::vector<const char*> validationLayers = {
-	"VK_LAYER_KHRONOS_validation"
-};
-
 const std::vector<const char*> deviceExtensions = {
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
-
-#ifdef NDEBUG
-const bool enableValidationLayers = false;
-#else 
-const bool enableValidationLayers = true;
-#endif
 
 struct UniformBufferObject
 {
@@ -81,7 +72,7 @@ struct Vertex
 	glm::vec3 color;
 	glm::vec2 texCoord;
 
-	
+
 	// Describes how vertex data is laid out in memory so that it can be provided to the vertex shader	
 	static VkVertexInputBindingDescription getBindingDescription()
 	{
@@ -92,7 +83,7 @@ struct Vertex
 		return binding_description;
 	}
 
-	
+
 	// Tells vulkan how to read each attribute (position, color, etc.) from a vertex.
 	static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions()
 	{
@@ -128,21 +119,20 @@ namespace std {
 	};
 }
 
-class eclips_renderer {
+class EclipsRenderer {
 public:
-	void run() {
-		initWindow();
-		initVulkan();
-		mainLoop();
-		cleanup();
-	}
+	EclipsRenderer() = default;
+	EclipsRenderer(EclipsInstance& eclipsInstance, EclipsWindow& eclipsWindow);
+
+	bool init();
+	void drawFrame();
+	void destroyRenderer();
 
 private:
-	// Initialization
-	GLFWwindow* window = nullptr;
-	VkInstance instance = VK_NULL_HANDLE;
-	VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
-	VkSurfaceKHR surface = VK_NULL_HANDLE;
+	EclipsInstance* eclipsInstance;
+	GLFWwindow* window;
+	EclipsDebug eclipsDebug;
+	EclipsSurface eclipsSurface;
 
 	// Device & Queues 
 	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
@@ -214,10 +204,6 @@ private:
 
 	bool m_framebufferResized = false;
 
-	void initWindow();
-
-	void mainLoop();
-
 	static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
 
 	void initVulkan();
@@ -236,7 +222,7 @@ private:
 	void createTextureSampler();
 	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
 	void createTextureImageView();
-	void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);	
+	void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels);
 
 	VkCommandBuffer beginSingleTimeCommands();
@@ -307,31 +293,7 @@ private:
 
 	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
 
-	void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& create_info);
-
-	void setupDebugMessenger();
-
-	VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* p_create_info,
-		const VkAllocationCallbacks* p_allocator, VkDebugUtilsMessengerEXT* p_debug_messenger);
-
-	static void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debug_messenger,
-		const VkAllocationCallbacks* pAllocator);
-
-	void createInstance();
-
-	bool checkValidationLayerSupport();
-	std::vector<const char*> getRequiredExtensions();
-
-	void drawFrame();
 	void updateUniformBuffer(uint32_t current_image);
-
-	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
-		VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
-		VkDebugUtilsMessageTypeFlagsEXT message_type,
-		const VkDebugUtilsMessengerCallbackDataEXT* p_call_back_data,
-		void* p_user_data);
-
-	void cleanup();
 };
 
 #endif // ECLIPS_RENDERER_H

@@ -1,41 +1,29 @@
-#include "eclips_renderer.h"	
-
-// ECPLIS_RENDERER IMPLEMENTATION
-
+#include "pch.h"
+#include "eclipsRenderer.h"	
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
-
 #define TINYOBJLOADER_DISABLE_FAST_FLOAT
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
 
-void eclips_renderer::initWindow() {
-		glfwInit();
-		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-		glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-		window = glfwCreateWindow(WIDTH, HEIGHT, "Eclips", nullptr, nullptr);
-		glfwSetWindowUserPointer(window, this);
-		glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
+EclipsRenderer::EclipsRenderer(EclipsInstance& eclipsInstance, EclipsWindow& eclipsWindow)
+	: eclipsDebug(true), eclipsSurface(eclipsWindow), eclipsInstance(&eclipsInstance)
+{
 }
 
-void eclips_renderer::mainLoop() {
-	while (!glfwWindowShouldClose(window)) {
-		glfwPollEvents();
-		drawFrame();
-	}
-
-	vkDeviceWaitIdle(device);
-}
-		
-void eclips_renderer::framebufferResizeCallback(GLFWwindow* window, int width, int height) {
-	auto app = reinterpret_cast<eclips_renderer*>(glfwGetWindowUserPointer(window));
-	app->m_framebufferResized = true;
+bool EclipsRenderer::init() {
+	initVulkan();
+	return true;
 }
 
-void eclips_renderer::initVulkan() {
-	createInstance();
-	setupDebugMessenger();
-	createSurface();
+void EclipsRenderer::initVulkan() {
+	eclipsInstance->createInstance(
+		eclipsDebug.getRequiredExtensions(), 
+		static_cast<uint32_t>(validationLayers.size()),
+		validationLayers, true );
+
+	eclipsDebug.setupDebugMessenger(eclipsInstance->getInstance());
+	eclipsSurface.createSurface(eclipsInstance->getInstance());
 	pickPhysicalDevice();
 	createLogicalDevice();
 	createCommandpool();
@@ -61,7 +49,7 @@ void eclips_renderer::initVulkan() {
 	createSyncObjects();
 }
 
-void eclips_renderer::createColorResources()
+void EclipsRenderer::createColorResources()
 {
 	VkFormat colorFormat = swapChainImageFormat;
 
@@ -71,7 +59,7 @@ void eclips_renderer::createColorResources()
 
 }
 
-VkSampleCountFlagBits eclips_renderer::getMaxUsableSampleCount()
+VkSampleCountFlagBits EclipsRenderer::getMaxUsableSampleCount()
 {
 	VkPhysicalDeviceProperties physicalDeviceProperties;
 	vkGetPhysicalDeviceProperties(physicalDevice, &physicalDeviceProperties);
@@ -90,7 +78,7 @@ VkSampleCountFlagBits eclips_renderer::getMaxUsableSampleCount()
 	return VK_SAMPLE_COUNT_1_BIT;
 }
 
-void eclips_renderer::generateMipmaps(VkImage image, int32_t texWidth, VkFormat imageFormat, int32_t texHeight, uint32_t mipLevels)
+void EclipsRenderer::generateMipmaps(VkImage image, int32_t texWidth, VkFormat imageFormat, int32_t texHeight, uint32_t mipLevels)
 {
 	// Check if image format supports linear blitting
 	VkFormatProperties formatProperties;
@@ -179,7 +167,7 @@ void eclips_renderer::generateMipmaps(VkImage image, int32_t texWidth, VkFormat 
 }
 
 // OBJ: positions, texture coordinates and faces
-void eclips_renderer::loadModel(const std::string& MODEL_PATHS)
+void EclipsRenderer::loadModel(const std::string& MODEL_PATHS)
 {
 	tinyobj::attrib_t attrib;
 	std::vector<tinyobj::shape_t> shapes;
@@ -222,12 +210,12 @@ void eclips_renderer::loadModel(const std::string& MODEL_PATHS)
 	}
 }
 
-bool eclips_renderer::hasStencilComponent(VkFormat format)
+bool EclipsRenderer::hasStencilComponent(VkFormat format)
 {
 	return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
 }
 
-VkFormat eclips_renderer::findDepthFormat()
+VkFormat EclipsRenderer::findDepthFormat()
 {
 	return findSupportedFormat(
 		{ VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT },
@@ -236,7 +224,7 @@ VkFormat eclips_renderer::findDepthFormat()
 	);
 }
 
-VkFormat eclips_renderer::findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features) {
+VkFormat EclipsRenderer::findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features) {
 	for (VkFormat format : candidates) {
 		VkFormatProperties props;
 		vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &props);
@@ -253,7 +241,7 @@ VkFormat eclips_renderer::findSupportedFormat(const std::vector<VkFormat>& candi
 
 }
 
-void eclips_renderer::createDepthResources()
+void EclipsRenderer::createDepthResources()
 {
 	VkFormat depthFormat = findDepthFormat();
 
@@ -264,7 +252,7 @@ void eclips_renderer::createDepthResources()
 // TODO: 
 // Probably should query device properties outside the function and pass it around 
 // Add support for varying texture resulotions: samplerInfo.unnormalizedCoordinates
-void eclips_renderer::createTextureSampler() {
+void EclipsRenderer::createTextureSampler() {
 	VkSamplerCreateInfo samplerInfo{};
 	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
 
@@ -312,7 +300,7 @@ void eclips_renderer::createTextureSampler() {
 	}
 }
 
-VkImageView eclips_renderer::createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels) {
+VkImageView EclipsRenderer::createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels) {
 	VkImageViewCreateInfo viewInfo{};
 	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 	viewInfo.image = image;
@@ -332,11 +320,11 @@ VkImageView eclips_renderer::createImageView(VkImage image, VkFormat format, VkI
 	return imageView;
 }
 
-void eclips_renderer::createTextureImageView() {
+void EclipsRenderer::createTextureImageView() {
 	textureImageView = createImageView(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, mipLevels);
 }
 
-void eclips_renderer::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height) {
+void EclipsRenderer::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height) {
 	VkCommandBuffer commandBuffer = beginSingleTimeCommands();
 
 	VkBufferImageCopy region{};
@@ -368,7 +356,7 @@ void eclips_renderer::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t
 	endSingleTimeCommands(commandBuffer);
 }
 
-void eclips_renderer::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels) {
+void EclipsRenderer::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels) {
 	VkCommandBuffer commandBuffer = beginSingleTimeCommands();
 
 	// Modern GPUs and CPUs don’t always write directly to main memory 
@@ -449,7 +437,7 @@ void eclips_renderer::transitionImageLayout(VkImage image, VkFormat format, VkIm
 	endSingleTimeCommands(commandBuffer);
 }
 
-VkCommandBuffer eclips_renderer::beginSingleTimeCommands()
+VkCommandBuffer EclipsRenderer::beginSingleTimeCommands()
 {
 	VkCommandBufferAllocateInfo allocInfo = {};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -468,7 +456,7 @@ VkCommandBuffer eclips_renderer::beginSingleTimeCommands()
 	return command_buffer;
 }
 
-void eclips_renderer::endSingleTimeCommands(VkCommandBuffer commandBuffer) {
+void EclipsRenderer::endSingleTimeCommands(VkCommandBuffer commandBuffer) {
 	vkEndCommandBuffer(commandBuffer);
 
 	VkSubmitInfo submitInfo{};
@@ -482,7 +470,7 @@ void eclips_renderer::endSingleTimeCommands(VkCommandBuffer commandBuffer) {
 	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 }
 
-void eclips_renderer::createTextureImage()
+void EclipsRenderer::createTextureImage()
 {
 	int texWidth, texHeight, texChannels;
 	stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
@@ -515,9 +503,9 @@ void eclips_renderer::createTextureImage()
 	stbi_image_free(pixels);
 
 	createImage(texWidth, texHeight, mipLevels, VK_SAMPLE_COUNT_1_BIT,
-		VK_FORMAT_R8G8B8A8_SRGB, 
-		VK_IMAGE_TILING_OPTIMAL, 
-		VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, 
+		VK_FORMAT_R8G8B8A8_SRGB,
+		VK_IMAGE_TILING_OPTIMAL,
+		VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImage, textureImageMemory);
 
 	copyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
@@ -532,7 +520,7 @@ void eclips_renderer::createTextureImage()
 	vkFreeMemory(device, stagingBufferMemory, nullptr);
 }
 
-void eclips_renderer::createImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory) {
+void EclipsRenderer::createImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory) {
 	VkImageCreateInfo imageInfo{};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	imageInfo.imageType = VK_IMAGE_TYPE_2D;
@@ -571,7 +559,7 @@ void eclips_renderer::createImage(uint32_t width, uint32_t height, uint32_t mipL
 	* Allocate one descriptor set for each frame in flight, all with the same layout.
 	* They will be freed when the pool is destroyed
 	*/
-void eclips_renderer::createDescriptorSets()
+void EclipsRenderer::createDescriptorSets()
 {
 	std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
 	VkDescriptorSetAllocateInfo allocInfo{};
@@ -621,7 +609,7 @@ void eclips_renderer::createDescriptorSets()
 
 }
 
-void eclips_renderer::createDescriptorPool()
+void EclipsRenderer::createDescriptorPool()
 {
 	std::array<VkDescriptorPoolSize, 2> poolSizes{};
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -641,7 +629,7 @@ void eclips_renderer::createDescriptorPool()
 	}
 }
 
-void eclips_renderer::createUniformBuffers()
+void EclipsRenderer::createUniformBuffers()
 {
 	VkDeviceSize bufferSize = sizeof(UniformBufferObject);
 
@@ -661,7 +649,7 @@ void eclips_renderer::createUniformBuffers()
 
 // Think of it as the shape of the descriptor set,When creating pipelines or allocating the descriptor sets
 // you have to use the descriptor set layout.
-void eclips_renderer::createDescriptorSetLayout()
+void EclipsRenderer::createDescriptorSetLayout()
 {
 	VkDescriptorSetLayoutBinding uboLayoutBinding{};
 	uboLayoutBinding.binding = 0;
@@ -693,7 +681,7 @@ void eclips_renderer::createDescriptorSetLayout()
 	}
 }
 
-void eclips_renderer::createIndexBuffer() {
+void EclipsRenderer::createIndexBuffer() {
 	VkDeviceSize buffer_size = sizeof(indices[0]) * indices.size();
 
 	VkBuffer staging_buffer;
@@ -713,7 +701,7 @@ void eclips_renderer::createIndexBuffer() {
 	vkFreeMemory(device, staging_buffer_memory, nullptr);
 }
 
-void eclips_renderer::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
+void EclipsRenderer::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
 	VkBuffer& buffer, VkDeviceMemory& bufferMemory)
 {
 	VkBufferCreateInfo bufferInfo = {};
@@ -743,7 +731,7 @@ void eclips_renderer::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, 
 	vkBindBufferMemory(device, buffer, bufferMemory, 0);
 }
 
-void eclips_renderer::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
+void EclipsRenderer::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
 	VkCommandBuffer commandBuffer = beginSingleTimeCommands();
 
 	VkBufferCopy copyRegion{};
@@ -753,7 +741,7 @@ void eclips_renderer::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDevic
 	endSingleTimeCommands(commandBuffer);
 }
 
-void eclips_renderer::createVertexBuffer() {
+void EclipsRenderer::createVertexBuffer() {
 	VkDeviceSize buffer_size = sizeof(vertices[0]) * vertices.size();
 
 	VkBuffer staging_buffer;
@@ -774,7 +762,7 @@ void eclips_renderer::createVertexBuffer() {
 	vkFreeMemory(device, staging_buffer_memory, nullptr);
 }
 
-uint32_t eclips_renderer::findMemoryType(uint32_t type_filter, VkMemoryPropertyFlags properties)
+uint32_t EclipsRenderer::findMemoryType(uint32_t type_filter, VkMemoryPropertyFlags properties)
 {
 	VkPhysicalDeviceMemoryProperties mem_properties;
 	vkGetPhysicalDeviceMemoryProperties(physicalDevice, &mem_properties);
@@ -795,7 +783,7 @@ uint32_t eclips_renderer::findMemoryType(uint32_t type_filter, VkMemoryPropertyF
 	throw std::runtime_error("failed to find suitable memory type!");
 }
 
-void eclips_renderer::cleanupSwapChain() {
+void EclipsRenderer::cleanupSwapChain() {
 	vkDestroyImageView(device, colorImageView, nullptr);
 	vkDestroyImage(device, colorImage, nullptr);
 	vkFreeMemory(device, colorImageMemory, nullptr);
@@ -814,7 +802,7 @@ void eclips_renderer::cleanupSwapChain() {
 	vkDestroySwapchainKHR(device, m_swapChain, nullptr);
 }
 
-void eclips_renderer::recreateSwapChain() {
+void EclipsRenderer::recreateSwapChain() {
 	int width = 0, height = 0;
 	while (width == 0 || height == 0) {
 		glfwGetFramebufferSize(window, &width, &height);
@@ -836,7 +824,7 @@ void eclips_renderer::recreateSwapChain() {
 * The semaphore waiting process happens on the GPU while
 * the fence waiting process happens on the CPU for CPU->GPU sync
 */
-void eclips_renderer::createSyncObjects() {
+void EclipsRenderer::createSyncObjects() {
 	m_imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
 	m_renderFinishedSemaphores.resize(swapChainImages.size());
 	m_inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
@@ -862,7 +850,7 @@ void eclips_renderer::createSyncObjects() {
 	}
 }
 
-void eclips_renderer::createCommandBuffer() {
+void EclipsRenderer::createCommandBuffer() {
 	commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
 	VkCommandBufferAllocateInfo alloc_info{};
 	alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -885,7 +873,7 @@ void eclips_renderer::createCommandBuffer() {
 	* The buffer can contain commands that differ.
 	* some can push constants, be action type or descriptor set etc.
 	*/
-void eclips_renderer::recordCommandBuffer(VkCommandBuffer command_buffer, uint32_t image_index) {
+void EclipsRenderer::recordCommandBuffer(VkCommandBuffer command_buffer, uint32_t image_index) {
 	VkCommandBufferBeginInfo beginInfo{};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	beginInfo.flags = 0;
@@ -948,7 +936,7 @@ void eclips_renderer::recordCommandBuffer(VkCommandBuffer command_buffer, uint32
 
 // Creates the graphics command pool used for allocating per-frame command buffers.
 // The pool is reset every frame to allow command buffer reuse.	
-void eclips_renderer::createCommandpool() {
+void EclipsRenderer::createCommandpool() {
 	QueueFamilyIndices queue_family_indices = findQueueFamilies(physicalDevice);
 
 	VkCommandPoolCreateInfo pool_info{};
@@ -963,7 +951,7 @@ void eclips_renderer::createCommandpool() {
 	}
 }
 
-void eclips_renderer::createFrameBuffers() {
+void EclipsRenderer::createFrameBuffers() {
 	swapChainFramebuffers.resize(swapChainImageViews.size());
 	for (size_t i = 0; i < swapChainImageViews.size(); i++) {
 		std::array<VkImageView, 3> attachments = {
@@ -987,7 +975,7 @@ void eclips_renderer::createFrameBuffers() {
 	}
 }
 
-void eclips_renderer::createRenderPass() {
+void EclipsRenderer::createRenderPass() {
 	VkAttachmentDescription depthAttachment{};
 	depthAttachment.format = findDepthFormat();
 	depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -1013,12 +1001,12 @@ void eclips_renderer::createRenderPass() {
 
 	// Multisampled images cannot be presented directly 
 	// We first resolve them to a regular image 
-	colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; 
+	colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-	VkAttachmentDescription colorAttachmentResolve{};	
+	VkAttachmentDescription colorAttachmentResolve{};
 	colorAttachmentResolve.format = swapChainImageFormat;
 	colorAttachmentResolve.samples = VK_SAMPLE_COUNT_1_BIT;
-	colorAttachmentResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;	
+	colorAttachmentResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	colorAttachmentResolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 	colorAttachmentResolve.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	colorAttachmentResolve.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -1063,7 +1051,7 @@ void eclips_renderer::createRenderPass() {
 	}
 }
 
-void eclips_renderer::createGraphicsPipeline() {
+void EclipsRenderer::createGraphicsPipeline() {
 	auto vert_shader_code = readFile("Shaders/vert.spv");
 	auto frag_shader_code = readFile("Shaders/frag.spv");
 
@@ -1225,7 +1213,7 @@ void eclips_renderer::createGraphicsPipeline() {
 	vkDestroyShaderModule(device, frag_shader_module, nullptr);
 }
 
-VkShaderModule eclips_renderer::createShaderModule(const std::vector<char>& code) {
+VkShaderModule EclipsRenderer::createShaderModule(const std::vector<char>& code) {
 	VkShaderModuleCreateInfo create_info{};
 	create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
 	create_info.codeSize = code.size();
@@ -1239,7 +1227,7 @@ VkShaderModule eclips_renderer::createShaderModule(const std::vector<char>& code
 	return shader_module;
 }
 
-void eclips_renderer::createImageViews() {
+void EclipsRenderer::createImageViews() {
 	swapChainImageViews.resize(swapChainImages.size());
 
 	for (uint32_t i = 0; i < swapChainImages.size(); i++) {
@@ -1247,7 +1235,7 @@ void eclips_renderer::createImageViews() {
 	}
 }
 
-void eclips_renderer::createSwapChain() {
+void EclipsRenderer::createSwapChain() {
 	SwapChainSupportDetails swap_chain_support = querySwapChainSupport(physicalDevice);
 
 	VkSurfaceFormatKHR surface_format = chooseSwapSurfaceFormat(swap_chain_support.formats);
@@ -1261,7 +1249,7 @@ void eclips_renderer::createSwapChain() {
 
 	VkSwapchainCreateInfoKHR create_info{};
 	create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-	create_info.surface = surface;
+	create_info.surface = eclipsSurface.getSurface();
 	create_info.minImageCount = image_count;
 	create_info.imageFormat = surface_format.format;
 	create_info.imageColorSpace = surface_format.colorSpace;
@@ -1299,26 +1287,19 @@ void eclips_renderer::createSwapChain() {
 	swapChainExtent = extent;
 }
 
-void eclips_renderer::createSurface()
-{
-	if (glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create window surface");
-	}
-}
-
 /**
 	* Finds a GPU (physical device) on the computer and checks if it supports Vulkan.
 	* The physical device lets us query its properties and capabilities.
 	*/
-void eclips_renderer::pickPhysicalDevice()
+void EclipsRenderer::pickPhysicalDevice()
 {
 	uint32_t device_count = 0;
-	vkEnumeratePhysicalDevices(instance, &device_count, nullptr);
+	vkEnumeratePhysicalDevices(eclipsInstance->getInstance(), &device_count, nullptr);
 
 	if (device_count == 0) throw std::runtime_error("failed to find GPUs with Vulkan support!");
 
 	std::vector<VkPhysicalDevice> devices(device_count);
-	vkEnumeratePhysicalDevices(instance, &device_count, devices.data());
+	vkEnumeratePhysicalDevices(eclipsInstance->getInstance(), &device_count, devices.data());
 
 	for (const auto& device : devices) {
 		if (isDeviceSuitable(device)) {
@@ -1332,7 +1313,7 @@ void eclips_renderer::pickPhysicalDevice()
 }
 
 // Checks if the device supports the features we need and is suitable for our application
-bool eclips_renderer::isDeviceSuitable(VkPhysicalDevice device) {
+bool EclipsRenderer::isDeviceSuitable(VkPhysicalDevice device) {
 	QueueFamilyIndices indices = findQueueFamilies(device);
 	bool extensions_supported = checkDeviceExtensionSupport(device);
 
@@ -1349,7 +1330,7 @@ bool eclips_renderer::isDeviceSuitable(VkPhysicalDevice device) {
 	return indices.isComplete() && extensions_supported && swap_chain_adequate && supportedFeatures.samplerAnisotropy;
 }
 
-bool eclips_renderer::checkDeviceExtensionSupport(VkPhysicalDevice device) {
+bool EclipsRenderer::checkDeviceExtensionSupport(VkPhysicalDevice device) {
 	uint32_t extension_count;
 	vkEnumerateDeviceExtensionProperties(device, nullptr, &extension_count, nullptr);
 
@@ -1362,7 +1343,7 @@ bool eclips_renderer::checkDeviceExtensionSupport(VkPhysicalDevice device) {
 	return required_extensions.empty();
 }
 
-void eclips_renderer::createLogicalDevice() {
+void EclipsRenderer::createLogicalDevice() {
 	QueueFamilyIndices family_indices = findQueueFamilies(physicalDevice);
 	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
 	std::set<uint32_t> uniqueQueueFamilies = { family_indices.graphicsFamily.value(), family_indices.presentFamily.value() };
@@ -1388,7 +1369,7 @@ void eclips_renderer::createLogicalDevice() {
 	create_info.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
 	create_info.ppEnabledExtensionNames = deviceExtensions.data();
 
-	if (enableValidationLayers) {
+	if (eclipsDebug.getEnableValidationlayers()) {
 		create_info.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
 		create_info.ppEnabledLayerNames = validationLayers.data();
 	}
@@ -1401,7 +1382,7 @@ void eclips_renderer::createLogicalDevice() {
 	vkGetDeviceQueue(device, family_indices.presentFamily.value(), 0, &presentQueue);
 }
 
-VkSurfaceFormatKHR eclips_renderer::chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& available_formats) {
+VkSurfaceFormatKHR EclipsRenderer::chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& available_formats) {
 	for (const auto& available_format : available_formats) {
 		if (available_format.format == VK_FORMAT_B8G8R8A8_SRGB &&
 			available_format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
@@ -1411,14 +1392,14 @@ VkSurfaceFormatKHR eclips_renderer::chooseSwapSurfaceFormat(const std::vector<Vk
 	return available_formats[0];
 }
 
-VkPresentModeKHR eclips_renderer::chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& available_present_modes) {
+VkPresentModeKHR EclipsRenderer::chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& available_present_modes) {
 	for (const auto& mode : available_present_modes) {
 		if (mode == VK_PRESENT_MODE_MAILBOX_KHR) return mode;
 	}
 	return VK_PRESENT_MODE_FIFO_KHR;
 }
 
-VkExtent2D eclips_renderer::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) {
+VkExtent2D EclipsRenderer::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) {
 	if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
 		return capabilities.currentExtent;
 	}
@@ -1432,28 +1413,28 @@ VkExtent2D eclips_renderer::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& cap
 	}
 }
 
-SwapChainSupportDetails eclips_renderer::querySwapChainSupport(VkPhysicalDevice device) {
+SwapChainSupportDetails EclipsRenderer::querySwapChainSupport(VkPhysicalDevice device) {
 	SwapChainSupportDetails details;
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, eclipsSurface.getSurface(), &details.capabilities);
 
 	uint32_t format_count;
-	vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &format_count, nullptr);
+	vkGetPhysicalDeviceSurfaceFormatsKHR(device, eclipsSurface.getSurface(), &format_count, nullptr);
 	if (format_count != 0) {
 		details.formats.resize(format_count);
-		vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &format_count, details.formats.data());
+		vkGetPhysicalDeviceSurfaceFormatsKHR(device, eclipsSurface.getSurface(), &format_count, details.formats.data());
 	}
 
 	uint32_t present_mode_count;
-	vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &present_mode_count, nullptr);
+	vkGetPhysicalDeviceSurfacePresentModesKHR(device, eclipsSurface.getSurface(), &present_mode_count, nullptr);
 	if (present_mode_count != 0) {
 		details.presentModes.resize(present_mode_count);
-		vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &present_mode_count, details.presentModes.data());
+		vkGetPhysicalDeviceSurfacePresentModesKHR(device, eclipsSurface.getSurface(), &present_mode_count, details.presentModes.data());
 	}
 
 	return details;
 }
 
-std::vector<char> eclips_renderer::readFile(const std::string& filename) {
+std::vector<char> EclipsRenderer::readFile(const std::string& filename) {
 	std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
 	if (!file.is_open()) {
@@ -1470,7 +1451,7 @@ std::vector<char> eclips_renderer::readFile(const std::string& filename) {
 	return buffer;
 }
 
-QueueFamilyIndices eclips_renderer::findQueueFamilies(VkPhysicalDevice device) {
+QueueFamilyIndices EclipsRenderer::findQueueFamilies(VkPhysicalDevice device) {
 	QueueFamilyIndices family_indices;
 	uint32_t queue_family_count = 0;
 	vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, nullptr);
@@ -1483,7 +1464,7 @@ QueueFamilyIndices eclips_renderer::findQueueFamilies(VkPhysicalDevice device) {
 		if (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT) family_indices.graphicsFamily = i;
 
 		VkBool32 present_support = false;
-		vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &present_support);
+		vkGetPhysicalDeviceSurfaceSupportKHR(device, i, eclipsSurface.getSurface(), &present_support);
 		if (present_support) family_indices.presentFamily = i;
 
 		if (family_indices.isComplete()) break;
@@ -1492,105 +1473,7 @@ QueueFamilyIndices eclips_renderer::findQueueFamilies(VkPhysicalDevice device) {
 	return family_indices;
 }
 
-void eclips_renderer::populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& create_info) {
-	create_info = {};
-	create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-	create_info.messageSeverity =
-		VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-		VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-		VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-	create_info.messageType =
-		VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-		VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-		VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-	create_info.pfnUserCallback = debugCallback;
-	create_info.pUserData = nullptr;
-}
-
-void eclips_renderer::setupDebugMessenger() {
-	if (!enableValidationLayers) return;
-	VkDebugUtilsMessengerCreateInfoEXT create_info;
-	populateDebugMessengerCreateInfo(create_info);
-
-	if (CreateDebugUtilsMessengerEXT(instance, &create_info, nullptr, &debugMessenger) != VK_SUCCESS)
-		throw std::runtime_error("failed to set up debug messenger!");
-}
-
-VkResult eclips_renderer::CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* p_create_info,
-	const VkAllocationCallbacks* p_allocator, VkDebugUtilsMessengerEXT* p_debug_messenger) {
-	auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
-	if (func != nullptr) return func(instance, p_create_info, p_allocator, p_debug_messenger);
-	else return VK_ERROR_EXTENSION_NOT_PRESENT;
-}
-
-void eclips_renderer::DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debug_messenger,
-	const VkAllocationCallbacks* pAllocator) {
-	auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
-	if (func != nullptr) func(instance, debug_messenger, pAllocator);
-}
-
-void eclips_renderer::createInstance() {
-	if (enableValidationLayers && !checkValidationLayerSupport())
-		throw std::runtime_error("Validation layers requested, but not available");
-
-	VkApplicationInfo app_info{};
-	app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-	app_info.pApplicationName = "Hello Triangle";
-	app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-	app_info.pEngineName = "No Engine";
-	app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-	app_info.apiVersion = VK_API_VERSION_1_0;
-
-	VkInstanceCreateInfo create_info{};
-	create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-	create_info.pApplicationInfo = &app_info;
-
-	const auto extensions = getRequiredExtensions();
-	create_info.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
-	create_info.ppEnabledExtensionNames = extensions.data();
-
-	VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
-	if (enableValidationLayers) {
-		create_info.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
-		create_info.ppEnabledLayerNames = validationLayers.data();
-		populateDebugMessengerCreateInfo(debugCreateInfo);
-		create_info.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
-	}
-	else create_info.pNext = nullptr;
-
-	if (vkCreateInstance(&create_info, nullptr, &instance) != VK_SUCCESS)
-		throw std::runtime_error("failed to create instance!");
-}
-
-bool eclips_renderer::checkValidationLayerSupport() {
-	uint32_t layer_count;
-	vkEnumerateInstanceLayerProperties(&layer_count, nullptr);
-
-	std::vector<VkLayerProperties> available_layers(layer_count);
-	vkEnumerateInstanceLayerProperties(&layer_count, available_layers.data());
-
-	for (const char* layer_name : validationLayers) {
-		bool layer_found = false;
-		for (const auto& layer_properties : available_layers) {
-			if (strcmp(layer_name, layer_properties.layerName) == 0) {
-				layer_found = true;
-				break;
-			}
-		}
-		if (!layer_found) return false;
-	}
-	return true;
-}
-
-std::vector<const char*> eclips_renderer::getRequiredExtensions() {
-	uint32_t glfw_extension_count = 0;
-	const char** glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
-	std::vector<const char*> extensions(glfw_extensions, glfw_extensions + glfw_extension_count);
-	if (enableValidationLayers) extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-	return extensions;
-}
-
-void eclips_renderer::drawFrame() {
+void EclipsRenderer::drawFrame() {
 	vkWaitForFences(device, 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
 
 	uint32_t image_index;
@@ -1626,7 +1509,7 @@ void eclips_renderer::drawFrame() {
 	submit_info.commandBufferCount = 1;
 	submit_info.pCommandBuffers = &commandBuffers[m_currentFrame];
 
-	VkSemaphore signal_semaphores[] = { m_renderFinishedSemaphores[image_index] };	
+	VkSemaphore signal_semaphores[] = { m_renderFinishedSemaphores[image_index] };
 	submit_info.signalSemaphoreCount = 1;
 	submit_info.pSignalSemaphores = signal_semaphores;
 
@@ -1657,7 +1540,7 @@ void eclips_renderer::drawFrame() {
 	m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
-void eclips_renderer::updateUniformBuffer(uint32_t current_image)
+void EclipsRenderer::updateUniformBuffer(uint32_t current_image)
 {
 	static auto start_time = std::chrono::high_resolution_clock::now();
 
@@ -1668,7 +1551,7 @@ void eclips_renderer::updateUniformBuffer(uint32_t current_image)
 	UniformBufferObject ubo;
 
 	ubo.model = glm::rotate(glm::mat4(1.0f), time *
-	glm::radians(20.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		glm::radians(20.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 
 	ubo.view = glm::lookAt(
 		glm::vec3(2.0f, 2.0f, 2.0f),
@@ -1686,23 +1569,14 @@ void eclips_renderer::updateUniformBuffer(uint32_t current_image)
 	memcpy(uniformBuffersMapped[current_image], &ubo, sizeof(ubo));
 }
 
-VKAPI_ATTR VkBool32 VKAPI_CALL eclips_renderer::debugCallback(
-	VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
-	VkDebugUtilsMessageTypeFlagsEXT message_type,
-	const VkDebugUtilsMessengerCallbackDataEXT* p_call_back_data,
-	void* p_user_data) {
-	std::cerr << "Validation layer: " << p_call_back_data->pMessage << '\n';
-	return VK_FALSE;
-}
-
-void eclips_renderer::cleanup() {
+void EclipsRenderer::destroyRenderer() {
 
 	// Wait for the device to finish all operations before cleanup
 	// Otherwise we might destroy resources that are still in use 
 	vkDeviceWaitIdle(device);
 
 	cleanupSwapChain();
-	
+
 	vkDestroySampler(device, textureSampler, nullptr);
 	vkDestroyImageView(device, textureImageView, nullptr);
 
@@ -1741,14 +1615,7 @@ void eclips_renderer::cleanup() {
 
 	vkDestroyDevice(device, nullptr);
 
-	if (enableValidationLayers) {
-		DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
-	}
-
-	vkDestroySurfaceKHR(instance, surface, nullptr);
-	vkDestroyInstance(instance, nullptr);
-
-	glfwDestroyWindow(window);
-
-	glfwTerminate();
+	eclipsDebug.destroyEclipsDebug(eclipsInstance->getInstance());
+	eclipsSurface.destroySurface(eclipsInstance->getInstance());
+	eclipsInstance->destroyInstance();
 }
