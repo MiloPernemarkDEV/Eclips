@@ -28,36 +28,24 @@
 #include <algorithm>
 #include <array>
 #include <fstream>
-
 #include <unordered_map>
 
 #include "EclipsInstance.h"
 #include "EclipsDebug.h"
 #include "EclipsSurface.h"
+#include "EclipsDevice.h"
+#include "EclipsQueue.h"
 
 constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 
 const std::string MODEL_PATH_VIKING_ROOM = "assets/viking_room.obj";
 const std::string TEXTURE_PATH = "textures/viking_room.png";
 
-const std::vector<const char*> deviceExtensions = {
-	VK_KHR_SWAPCHAIN_EXTENSION_NAME
-};
-
 struct UniformBufferObject
 {
 	alignas(16)glm::mat4 model;
 	alignas(16)glm::mat4 view;
 	alignas(16)glm::mat4 proj;
-};
-
-struct QueueFamilyIndices {
-	std::optional<uint32_t> graphicsFamily;
-	std::optional<uint32_t> presentFamily;
-
-	bool isComplete() {
-		return graphicsFamily.has_value() && presentFamily.has_value();
-	}
 };
 
 struct SwapChainSupportDetails {
@@ -133,12 +121,8 @@ private:
 	GLFWwindow* window;
 	EclipsDebug eclipsDebug;
 	EclipsSurface eclipsSurface;
-
-	// Device & Queues 
-	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
-	VkDevice device = VK_NULL_HANDLE;
-	VkQueue graphicsQueue = VK_NULL_HANDLE;
-	VkQueue presentQueue = VK_NULL_HANDLE;
+	EclipsDevice eclipsDevice;
+	EclipsQueue eclipsQueue;
 
 	// Swap Chain
 	VkSwapchainKHR m_swapChain = VK_NULL_HANDLE;
@@ -187,16 +171,6 @@ private:
 	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;
 
-	// Multisampling 
-	// To remove the saw like patterns along the edges we will use multisampling 
-	// That saw like effect is called aliasing, hence the word anti-aliasing that always show up make more sense now 
-
-	// What MSAA does is that it uses multiple sample points per pixel to determine it's final color 
-	// More samples lead to better results but it is also hurtful for performance 
-
-	// in MSAA each pixel is samples in an offscreen buffer which is then rendererd to the screen 
-
-	// Im going to start with the maximum number of samples but we need to lower that down later 
 	VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 	VkImage colorImage;
 	VkDeviceMemory colorImageMemory;
@@ -273,14 +247,6 @@ private:
 
 	void cleanupSwapChain();
 
-	void createSurface();
-	void pickPhysicalDevice();
-
-	bool isDeviceSuitable(VkPhysicalDevice device);
-
-	bool checkDeviceExtensionSupport(VkPhysicalDevice device);
-	void createLogicalDevice();
-
 	VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& available_formats);
 
 	VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& available_present_modes);
@@ -290,8 +256,6 @@ private:
 	SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
 
 	static std::vector<char> readFile(const std::string& filename);
-
-	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
 
 	void updateUniformBuffer(uint32_t current_image);
 };

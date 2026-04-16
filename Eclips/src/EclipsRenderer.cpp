@@ -7,7 +7,7 @@
 #include "tiny_obj_loader.h"
 
 EclipsRenderer::EclipsRenderer(EclipsInstance& eclipsInstance, EclipsWindow& eclipsWindow)
-	: eclipsDebug(true), eclipsSurface(eclipsWindow), eclipsInstance(&eclipsInstance)
+	: eclipsDebug(true), eclipsSurface(eclipsWindow), eclipsInstance(&eclipsInstance), eclipsDevice(eclipsQueue, eclipsSurface)
 {
 }
 
@@ -17,15 +17,15 @@ bool EclipsRenderer::init() {
 }
 
 void EclipsRenderer::initVulkan() {
-	eclipsInstance->createInstance(
-		eclipsDebug.getRequiredExtensions(), 
-		static_cast<uint32_t>(validationLayers.size()),
-		validationLayers, true );
+	eclipsInstance->createInstance(eclipsDebug.getRequiredExtensions(), 
+		static_cast<uint32_t>(validationLayers.size()),validationLayers, true );
 
 	eclipsDebug.setupDebugMessenger(eclipsInstance->getInstance());
 	eclipsSurface.createSurface(eclipsInstance->getInstance());
-	pickPhysicalDevice();
-	createLogicalDevice();
+
+	eclipsDevice.pickPhysicalDevice(eclipsInstance->getInstance());
+	eclipsDevice.createLogicalDevice(eclipsDebug, eclipsSurface.getSurface());
+
 	createCommandpool();
 	createSwapChain();
 	createImageViews();
@@ -62,7 +62,7 @@ void EclipsRenderer::createColorResources()
 VkSampleCountFlagBits EclipsRenderer::getMaxUsableSampleCount()
 {
 	VkPhysicalDeviceProperties physicalDeviceProperties;
-	vkGetPhysicalDeviceProperties(physicalDevice, &physicalDeviceProperties);
+	vkGetPhysicalDeviceProperties(eclipsDevice.getPhysicalDevice(), &physicalDeviceProperties);
 
 	// Limits is a member struct inside the properties struct we queried that has a lot of information about the device limits
 	VkSampleCountFlags counts = physicalDeviceProperties.limits.framebufferColorSampleCounts &
@@ -82,7 +82,7 @@ void EclipsRenderer::generateMipmaps(VkImage image, int32_t texWidth, VkFormat i
 {
 	// Check if image format supports linear blitting
 	VkFormatProperties formatProperties;
-	vkGetPhysicalDeviceFormatProperties(physicalDevice, imageFormat, &formatProperties);
+	vkGetPhysicalDeviceFormatProperties(eclipsDevice.getPhysicalDevice(), imageFormat, &formatProperties);
 
 	if (!(formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT)) {
 		throw std::runtime_error("texture image format does not support linear blitting!");
@@ -227,7 +227,7 @@ VkFormat EclipsRenderer::findDepthFormat()
 VkFormat EclipsRenderer::findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features) {
 	for (VkFormat format : candidates) {
 		VkFormatProperties props;
-		vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &props);
+		vkGetPhysicalDeviceFormatProperties(eclipsDevice.getPhysicalDevice(), format, &props);
 
 		if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features) {
 			return format;
@@ -273,7 +273,7 @@ void EclipsRenderer::createTextureSampler() {
 	// Limits has a member called maxSamplerAnisotropy, if we want to go for max quality we can simply use that value, 
 	// But we can also choose a lower value for better performance
 	VkPhysicalDeviceProperties properties{};
-	vkGetPhysicalDeviceProperties(physicalDevice, &properties);
+	vkGetPhysicalDeviceProperties(eclipsDevice.getPhysicalDevice(), &properties);
 	samplerInfo.anisotropyEnable = VK_TRUE;
 	samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
 
@@ -295,7 +295,7 @@ void EclipsRenderer::createTextureSampler() {
 	samplerInfo.minLod = 0.0f;
 	samplerInfo.maxLod = VK_LOD_CLAMP_NONE;
 
-	if (vkCreateSampler(device, &samplerInfo, nullptr, &textureSampler) != VK_SUCCESS) {
+	if (vkCreateSampler(eclipsDevice.getLogicalDevice(), &samplerInfo, nullptr, &textureSampler) != VK_SUCCESS) {
 		throw std::runtime_error("ERROR_IN_FUNCTION: CreateTextureSampler(): failed to create texture sampler!");
 	}
 }
@@ -313,7 +313,7 @@ VkImageView EclipsRenderer::createImageView(VkImage image, VkFormat format, VkIm
 	viewInfo.subresourceRange.layerCount = 1;
 
 	VkImageView imageView;
-	if (vkCreateImageView(device, &viewInfo, nullptr, &imageView) != VK_SUCCESS) {
+	if (vkCreateImageView(eclipsDevice.getLogicalDevice(), &viewInfo, nullptr, &imageView) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create image view!");
 	}
 
@@ -446,7 +446,7 @@ VkCommandBuffer EclipsRenderer::beginSingleTimeCommands()
 	allocInfo.commandBufferCount = 1;
 
 	VkCommandBuffer command_buffer{};
-	vkAllocateCommandBuffers(device, &allocInfo, &command_buffer);
+	vkAllocateCommandBuffers(eclipsDevice.getLogicalDevice(), &allocInfo, &command_buffer);
 
 	VkCommandBufferBeginInfo begin_info{};
 	begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -464,10 +464,10 @@ void EclipsRenderer::endSingleTimeCommands(VkCommandBuffer commandBuffer) {
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &commandBuffer;
 
-	vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-	vkQueueWaitIdle(graphicsQueue);
+	vkQueueSubmit(eclipsQueue.getGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
+	vkQueueWaitIdle(eclipsQueue.getGraphicsQueue());
 
-	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
+	vkFreeCommandBuffers(eclipsDevice.getLogicalDevice(), commandPool, 1, &commandBuffer);
 }
 
 void EclipsRenderer::createTextureImage()
@@ -495,9 +495,9 @@ void EclipsRenderer::createTextureImage()
 	void* data;
 
 	// we directly copy the pixel data to the buffer
-	vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
+	vkMapMemory(eclipsDevice.getLogicalDevice(), stagingBufferMemory, 0, imageSize, 0, &data);
 	memcpy(data, pixels, static_cast<size_t>(imageSize));
-	vkUnmapMemory(device, stagingBufferMemory);
+	vkUnmapMemory(eclipsDevice.getLogicalDevice(), stagingBufferMemory);
 
 	// As we have copied the original pixel data to the buffer we can free it now 
 	stbi_image_free(pixels);
@@ -516,8 +516,8 @@ void EclipsRenderer::createTextureImage()
 
 	generateMipmaps(textureImage, texWidth, VK_FORMAT_R8G8B8A8_SRGB, texHeight, mipLevels);
 
-	vkDestroyBuffer(device, stagingBuffer, nullptr);
-	vkFreeMemory(device, stagingBufferMemory, nullptr);
+	vkDestroyBuffer(eclipsDevice.getLogicalDevice(), stagingBuffer, nullptr);
+	vkFreeMemory(eclipsDevice.getLogicalDevice(), stagingBufferMemory, nullptr);
 }
 
 void EclipsRenderer::createImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory) {
@@ -536,23 +536,23 @@ void EclipsRenderer::createImage(uint32_t width, uint32_t height, uint32_t mipLe
 	imageInfo.samples = numSamples;
 	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-	if (vkCreateImage(device, &imageInfo, nullptr, &image) != VK_SUCCESS) {
+	if (vkCreateImage(eclipsDevice.getLogicalDevice(), &imageInfo, nullptr, &image) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create image!");
 	}
 
 	VkMemoryRequirements memRequirements;
-	vkGetImageMemoryRequirements(device, image, &memRequirements);
+	vkGetImageMemoryRequirements(eclipsDevice.getLogicalDevice(), image, &memRequirements);
 
 	VkMemoryAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	allocInfo.allocationSize = memRequirements.size;
 	allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
 
-	if (vkAllocateMemory(device, &allocInfo, nullptr, &imageMemory) != VK_SUCCESS) {
+	if (vkAllocateMemory(eclipsDevice.getLogicalDevice(), &allocInfo, nullptr, &imageMemory) != VK_SUCCESS) {
 		throw std::runtime_error("failed to allocate image memory!");
 	}
 
-	vkBindImageMemory(device, image, imageMemory, 0);
+	vkBindImageMemory(eclipsDevice.getLogicalDevice(), image, imageMemory, 0);
 }
 
 /**
@@ -569,7 +569,7 @@ void EclipsRenderer::createDescriptorSets()
 	allocInfo.pSetLayouts = layouts.data();
 
 	descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
-	if (vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()) != VK_SUCCESS)
+	if (vkAllocateDescriptorSets(eclipsDevice.getLogicalDevice(), &allocInfo, descriptorSets.data()) != VK_SUCCESS)
 	{
 		throw std::runtime_error("failed to allocate descriptor sets");
 	}
@@ -604,7 +604,7 @@ void EclipsRenderer::createDescriptorSets()
 		descriptorWrites[1].descriptorCount = 1;
 		descriptorWrites[1].pImageInfo = &imageInfo;
 
-		vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+		vkUpdateDescriptorSets(eclipsDevice.getLogicalDevice(), static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 	}
 
 }
@@ -623,7 +623,7 @@ void EclipsRenderer::createDescriptorPool()
 	poolInfo.pPoolSizes = poolSizes.data();
 	poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
-	if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS)
+	if (vkCreateDescriptorPool(eclipsDevice.getLogicalDevice(), &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS)
 	{
 		throw std::runtime_error("failed to create descriptor pool!");
 	}
@@ -642,7 +642,7 @@ void EclipsRenderer::createUniformBuffers()
 		createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
 			VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffers[i], uniformBuffersMemory[i]);
 
-		vkMapMemory(device, uniformBuffersMemory[i], 0, bufferSize, 0, &uniformBuffersMapped[i]);
+		vkMapMemory(eclipsDevice.getLogicalDevice(), uniformBuffersMemory[i], 0, bufferSize, 0, &uniformBuffersMapped[i]);
 	}
 }
 
@@ -675,7 +675,7 @@ void EclipsRenderer::createDescriptorSetLayout()
 	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
 	layoutInfo.pBindings = bindings.data();
 
-	if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS)
+	if (vkCreateDescriptorSetLayout(eclipsDevice.getLogicalDevice(), &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create descriptor set layout!");
 	}
@@ -689,16 +689,16 @@ void EclipsRenderer::createIndexBuffer() {
 	createBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, staging_buffer, staging_buffer_memory);
 
 	void* data;
-	vkMapMemory(device, staging_buffer_memory, 0, buffer_size, 0, &data);
+	vkMapMemory(eclipsDevice.getLogicalDevice(), staging_buffer_memory, 0, buffer_size, 0, &data);
 	memcpy(data, indices.data(), (size_t)buffer_size);
-	vkUnmapMemory(device, staging_buffer_memory);
+	vkUnmapMemory(eclipsDevice.getLogicalDevice(), staging_buffer_memory);
 
 	createBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBuffer, indexBufferMemory);
 
 	copyBuffer(staging_buffer, indexBuffer, buffer_size);
 
-	vkDestroyBuffer(device, staging_buffer, nullptr);
-	vkFreeMemory(device, staging_buffer_memory, nullptr);
+	vkDestroyBuffer(eclipsDevice.getLogicalDevice(), staging_buffer, nullptr);
+	vkFreeMemory(eclipsDevice.getLogicalDevice(), staging_buffer_memory, nullptr);
 }
 
 void EclipsRenderer::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
@@ -710,25 +710,25 @@ void EclipsRenderer::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, V
 	bufferInfo.usage = usage;
 	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-	if (vkCreateBuffer(device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS)
+	if (vkCreateBuffer(eclipsDevice.getLogicalDevice(), &bufferInfo, nullptr, &buffer) != VK_SUCCESS)
 	{
 		throw std::runtime_error("createBuffer(); failed to create buffer!");
 	}
 
 	VkMemoryRequirements memRequirements;
-	vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
+	vkGetBufferMemoryRequirements(eclipsDevice.getLogicalDevice(), buffer, &memRequirements);
 
 	VkMemoryAllocateInfo allocInfo = {};
 	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	allocInfo.allocationSize = memRequirements.size;
 	allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
 
-	if (vkAllocateMemory(device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS)
+	if (vkAllocateMemory(eclipsDevice.getLogicalDevice(), &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS)
 	{
 		throw std::runtime_error("failed to allocate buffer memory!");
 	}
 
-	vkBindBufferMemory(device, buffer, bufferMemory, 0);
+	vkBindBufferMemory(eclipsDevice.getLogicalDevice(), buffer, bufferMemory, 0);
 }
 
 void EclipsRenderer::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
@@ -750,22 +750,22 @@ void EclipsRenderer::createVertexBuffer() {
 		| VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, staging_buffer, staging_buffer_memory);
 
 	void* data;
-	vkMapMemory(device, staging_buffer_memory, 0, buffer_size, 0, &data);
+	vkMapMemory(eclipsDevice.getLogicalDevice(), staging_buffer_memory, 0, buffer_size, 0, &data);
 	memcpy(data, vertices.data(), (size_t)buffer_size);
-	vkUnmapMemory(device, staging_buffer_memory);
+	vkUnmapMemory(eclipsDevice.getLogicalDevice(), staging_buffer_memory);
 
 	createBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_vertexBuffer, m_vertexBufferMemory);
 
 	copyBuffer(staging_buffer, m_vertexBuffer, buffer_size);
-	vkDestroyBuffer(device, staging_buffer, nullptr);
-	vkFreeMemory(device, staging_buffer_memory, nullptr);
+	vkDestroyBuffer(eclipsDevice.getLogicalDevice(), staging_buffer, nullptr);
+	vkFreeMemory(eclipsDevice.getLogicalDevice(), staging_buffer_memory, nullptr);
 }
 
 uint32_t EclipsRenderer::findMemoryType(uint32_t type_filter, VkMemoryPropertyFlags properties)
 {
 	VkPhysicalDeviceMemoryProperties mem_properties;
-	vkGetPhysicalDeviceMemoryProperties(physicalDevice, &mem_properties);
+	vkGetPhysicalDeviceMemoryProperties(eclipsDevice.getPhysicalDevice(), &mem_properties);
 
 	for (uint32_t i = 0; i < mem_properties.memoryTypeCount; i++) {
 		if ((type_filter & (1 << i)) && (mem_properties.memoryTypes[i].propertyFlags & properties) == properties) {
@@ -784,22 +784,22 @@ uint32_t EclipsRenderer::findMemoryType(uint32_t type_filter, VkMemoryPropertyFl
 }
 
 void EclipsRenderer::cleanupSwapChain() {
-	vkDestroyImageView(device, colorImageView, nullptr);
-	vkDestroyImage(device, colorImage, nullptr);
-	vkFreeMemory(device, colorImageMemory, nullptr);
-	vkDestroyImageView(device, depthImageView, nullptr);
-	vkDestroyImage(device, depthImage, nullptr);
-	vkFreeMemory(device, depthImageMemory, nullptr);
+	vkDestroyImageView(eclipsDevice.getLogicalDevice(), colorImageView, nullptr);
+	vkDestroyImage(eclipsDevice.getLogicalDevice(), colorImage, nullptr);
+	vkFreeMemory(eclipsDevice.getLogicalDevice(), colorImageMemory, nullptr);
+	vkDestroyImageView(eclipsDevice.getLogicalDevice(), depthImageView, nullptr);
+	vkDestroyImage(eclipsDevice.getLogicalDevice(), depthImage, nullptr);
+	vkFreeMemory(eclipsDevice.getLogicalDevice(), depthImageMemory, nullptr);
 
 	for (auto framebuffer : swapChainFramebuffers) {
-		vkDestroyFramebuffer(device, framebuffer, nullptr);
+		vkDestroyFramebuffer(eclipsDevice.getLogicalDevice(), framebuffer, nullptr);
 	}
 
 	for (auto image_view : swapChainImageViews) {
-		vkDestroyImageView(device, image_view, nullptr);
+		vkDestroyImageView(eclipsDevice.getLogicalDevice(), image_view, nullptr);
 	}
 
-	vkDestroySwapchainKHR(device, m_swapChain, nullptr);
+	vkDestroySwapchainKHR(eclipsDevice.getLogicalDevice(), m_swapChain, nullptr);
 }
 
 void EclipsRenderer::recreateSwapChain() {
@@ -809,7 +809,7 @@ void EclipsRenderer::recreateSwapChain() {
 		glfwWaitEvents();
 	}
 
-	vkDeviceWaitIdle(device);
+	vkDeviceWaitIdle(eclipsDevice.getLogicalDevice());
 
 	cleanupSwapChain();
 
@@ -837,14 +837,14 @@ void EclipsRenderer::createSyncObjects() {
 	fence_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		if (vkCreateSemaphore(device, &semaphore_info, nullptr, &m_imageAvailableSemaphores[i]) != VK_SUCCESS ||
-			vkCreateFence(device, &fence_info, nullptr, &m_inFlightFences[i]) != VK_SUCCESS) {
+		if (vkCreateSemaphore(eclipsDevice.getLogicalDevice(), &semaphore_info, nullptr, &m_imageAvailableSemaphores[i]) != VK_SUCCESS ||
+			vkCreateFence(eclipsDevice.getLogicalDevice(), &fence_info, nullptr, &m_inFlightFences[i]) != VK_SUCCESS) {
 			throw std::runtime_error("failed to create synchronization objects for a frame!");
 		}
 	}
 
 	for (size_t i = 0; i < m_renderFinishedSemaphores.size(); i++) {
-		if (vkCreateSemaphore(device, &semaphore_info, nullptr, &m_renderFinishedSemaphores[i]) != VK_SUCCESS) {
+		if (vkCreateSemaphore(eclipsDevice.getLogicalDevice(), &semaphore_info, nullptr, &m_renderFinishedSemaphores[i]) != VK_SUCCESS) {
 			throw std::runtime_error("failed to create render finished semaphore!");
 		}
 	}
@@ -858,7 +858,7 @@ void EclipsRenderer::createCommandBuffer() {
 	alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	alloc_info.commandBufferCount = (uint32_t)commandBuffers.size();
 
-	if (vkAllocateCommandBuffers(device, &alloc_info, commandBuffers.data()) != VK_SUCCESS) {
+	if (vkAllocateCommandBuffers(eclipsDevice.getLogicalDevice(), &alloc_info, commandBuffers.data()) != VK_SUCCESS) {
 		throw std::runtime_error("failed to allocate command buffers!");
 	}
 }
@@ -933,11 +933,10 @@ void EclipsRenderer::recordCommandBuffer(VkCommandBuffer command_buffer, uint32_
 	}
 }
 
-
 // Creates the graphics command pool used for allocating per-frame command buffers.
 // The pool is reset every frame to allow command buffer reuse.	
 void EclipsRenderer::createCommandpool() {
-	QueueFamilyIndices queue_family_indices = findQueueFamilies(physicalDevice);
+	QueueFamilyIndices queue_family_indices = eclipsQueue.findQueueFamilies(eclipsDevice.getPhysicalDevice(), eclipsSurface.getSurface());
 
 	VkCommandPoolCreateInfo pool_info{};
 
@@ -946,7 +945,7 @@ void EclipsRenderer::createCommandpool() {
 	pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 	pool_info.queueFamilyIndex = queue_family_indices.graphicsFamily.value();
 
-	if (vkCreateCommandPool(device, &pool_info, nullptr, &commandPool) != VK_SUCCESS) {
+	if (vkCreateCommandPool(eclipsDevice.getLogicalDevice(), &pool_info, nullptr, &commandPool) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create command pool!");
 	}
 }
@@ -969,7 +968,7 @@ void EclipsRenderer::createFrameBuffers() {
 		framebufferInfo.height = swapChainExtent.height;
 		framebufferInfo.layers = 1;
 
-		if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &swapChainFramebuffers[i]) != VK_SUCCESS) {
+		if (vkCreateFramebuffer(eclipsDevice.getLogicalDevice(), &framebufferInfo, nullptr, &swapChainFramebuffers[i]) != VK_SUCCESS) {
 			throw std::runtime_error("failed to create framebuffer!");
 		}
 	}
@@ -1046,7 +1045,7 @@ void EclipsRenderer::createRenderPass() {
 	renderPassInfo.dependencyCount = 1;
 	renderPassInfo.pDependencies = &dependency;
 
-	if (vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS) {
+	if (vkCreateRenderPass(eclipsDevice.getLogicalDevice(), &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create render pass!");
 	}
 }
@@ -1166,7 +1165,7 @@ void EclipsRenderer::createGraphicsPipeline() {
 	pipeline_layout_info.pushConstantRangeCount = 0;
 	pipeline_layout_info.pPushConstantRanges = nullptr;
 
-	if (vkCreatePipelineLayout(device, &pipeline_layout_info, nullptr, &m_pipelineLayout) != VK_SUCCESS) {
+	if (vkCreatePipelineLayout(eclipsDevice.getLogicalDevice(), &pipeline_layout_info, nullptr, &m_pipelineLayout) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create pipeline layout!");
 	}
 
@@ -1204,13 +1203,13 @@ void EclipsRenderer::createGraphicsPipeline() {
 	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
 	pipelineInfo.basePipelineIndex = -1;
 
-	if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr,
+	if (vkCreateGraphicsPipelines(eclipsDevice.getLogicalDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr,
 		&m_graphicsPipeline) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create graphics pipeline!");
 	}
 
-	vkDestroyShaderModule(device, vert_shader_module, nullptr);
-	vkDestroyShaderModule(device, frag_shader_module, nullptr);
+	vkDestroyShaderModule(eclipsDevice.getLogicalDevice(), vert_shader_module, nullptr);
+	vkDestroyShaderModule(eclipsDevice.getLogicalDevice(), frag_shader_module, nullptr);
 }
 
 VkShaderModule EclipsRenderer::createShaderModule(const std::vector<char>& code) {
@@ -1220,7 +1219,7 @@ VkShaderModule EclipsRenderer::createShaderModule(const std::vector<char>& code)
 	create_info.pCode = reinterpret_cast<const uint32_t*>(code.data());
 
 	VkShaderModule shader_module;
-	if (vkCreateShaderModule(device, &create_info, nullptr, &shader_module) != VK_SUCCESS) {
+	if (vkCreateShaderModule(eclipsDevice.getLogicalDevice(), &create_info, nullptr, &shader_module) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create shader module!");
 	}
 
@@ -1236,7 +1235,7 @@ void EclipsRenderer::createImageViews() {
 }
 
 void EclipsRenderer::createSwapChain() {
-	SwapChainSupportDetails swap_chain_support = querySwapChainSupport(physicalDevice);
+	SwapChainSupportDetails swap_chain_support = querySwapChainSupport(eclipsDevice.getPhysicalDevice());
 
 	VkSurfaceFormatKHR surface_format = chooseSwapSurfaceFormat(swap_chain_support.formats);
 	VkPresentModeKHR present_mode = chooseSwapPresentMode(swap_chain_support.presentModes);
@@ -1257,7 +1256,7 @@ void EclipsRenderer::createSwapChain() {
 	create_info.imageArrayLayers = 1;
 	create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-	QueueFamilyIndices family_indices = findQueueFamilies(physicalDevice);
+	QueueFamilyIndices family_indices = eclipsQueue.findQueueFamilies(eclipsDevice.getPhysicalDevice(), eclipsSurface.getSurface());
 	uint32_t queueFamilyIndices[] = { family_indices.graphicsFamily.value(), family_indices.presentFamily.value() };
 
 	if (family_indices.graphicsFamily != family_indices.presentFamily) {
@@ -1275,111 +1274,16 @@ void EclipsRenderer::createSwapChain() {
 	create_info.clipped = VK_TRUE;
 	create_info.oldSwapchain = VK_NULL_HANDLE;
 
-	if (vkCreateSwapchainKHR(device, &create_info, nullptr, &m_swapChain) != VK_SUCCESS) {
+	if (vkCreateSwapchainKHR(eclipsDevice.getLogicalDevice(), &create_info, nullptr, &m_swapChain) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create swap chain");
 	}
 
-	vkGetSwapchainImagesKHR(device, m_swapChain, &image_count, nullptr);
+	vkGetSwapchainImagesKHR(eclipsDevice.getLogicalDevice(), m_swapChain, &image_count, nullptr);
 	swapChainImages.resize(image_count);
-	vkGetSwapchainImagesKHR(device, m_swapChain, &image_count, swapChainImages.data());
+	vkGetSwapchainImagesKHR(eclipsDevice.getLogicalDevice(), m_swapChain, &image_count, swapChainImages.data());
 
 	swapChainImageFormat = surface_format.format;
 	swapChainExtent = extent;
-}
-
-/**
-	* Finds a GPU (physical device) on the computer and checks if it supports Vulkan.
-	* The physical device lets us query its properties and capabilities.
-	*/
-void EclipsRenderer::pickPhysicalDevice()
-{
-	uint32_t device_count = 0;
-	vkEnumeratePhysicalDevices(eclipsInstance->getInstance(), &device_count, nullptr);
-
-	if (device_count == 0) throw std::runtime_error("failed to find GPUs with Vulkan support!");
-
-	std::vector<VkPhysicalDevice> devices(device_count);
-	vkEnumeratePhysicalDevices(eclipsInstance->getInstance(), &device_count, devices.data());
-
-	for (const auto& device : devices) {
-		if (isDeviceSuitable(device)) {
-			physicalDevice = device;
-			msaaSamples = getMaxUsableSampleCount();
-			break;
-		}
-	}
-
-	if (physicalDevice == VK_NULL_HANDLE) throw std::runtime_error("failed to find suitable GPU!");
-}
-
-// Checks if the device supports the features we need and is suitable for our application
-bool EclipsRenderer::isDeviceSuitable(VkPhysicalDevice device) {
-	QueueFamilyIndices indices = findQueueFamilies(device);
-	bool extensions_supported = checkDeviceExtensionSupport(device);
-
-	bool swap_chain_adequate = false;
-	if (extensions_supported) {
-		SwapChainSupportDetails swap_chain_support = querySwapChainSupport(device);
-		swap_chain_adequate = !swap_chain_support.formats.empty() && !swap_chain_support.presentModes.empty();
-	}
-
-	VkPhysicalDeviceFeatures supportedFeatures;
-	vkGetPhysicalDeviceFeatures(device, &supportedFeatures);
-
-	// If we dont want to force anistropic filtering we need to remove this
-	return indices.isComplete() && extensions_supported && swap_chain_adequate && supportedFeatures.samplerAnisotropy;
-}
-
-bool EclipsRenderer::checkDeviceExtensionSupport(VkPhysicalDevice device) {
-	uint32_t extension_count;
-	vkEnumerateDeviceExtensionProperties(device, nullptr, &extension_count, nullptr);
-
-	std::vector<VkExtensionProperties> available_extensions(extension_count);
-	vkEnumerateDeviceExtensionProperties(device, nullptr, &extension_count, available_extensions.data());
-
-	std::set<std::string> required_extensions(deviceExtensions.begin(), deviceExtensions.end());
-	for (const auto& extension : available_extensions) required_extensions.erase(extension.extensionName);
-
-	return required_extensions.empty();
-}
-
-void EclipsRenderer::createLogicalDevice() {
-	QueueFamilyIndices family_indices = findQueueFamilies(physicalDevice);
-	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-	std::set<uint32_t> uniqueQueueFamilies = { family_indices.graphicsFamily.value(), family_indices.presentFamily.value() };
-
-	float queue_priority = 1.0f;
-	for (uint32_t queue_family : uniqueQueueFamilies) {
-		VkDeviceQueueCreateInfo queue_create_info{};
-		queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-		queue_create_info.queueFamilyIndex = queue_family;
-		queue_create_info.queueCount = 1;
-		queue_create_info.pQueuePriorities = &queue_priority;
-		queueCreateInfos.push_back(queue_create_info);
-	}
-
-	VkPhysicalDeviceFeatures device_features{};
-	device_features.samplerAnisotropy = VK_TRUE;
-
-	VkDeviceCreateInfo create_info{};
-	create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	create_info.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
-	create_info.pQueueCreateInfos = queueCreateInfos.data();
-	create_info.pEnabledFeatures = &device_features;
-	create_info.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
-	create_info.ppEnabledExtensionNames = deviceExtensions.data();
-
-	if (eclipsDebug.getEnableValidationlayers()) {
-		create_info.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
-		create_info.ppEnabledLayerNames = validationLayers.data();
-	}
-
-	if (vkCreateDevice(physicalDevice, &create_info, nullptr, &device) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create logical device");
-	}
-
-	vkGetDeviceQueue(device, family_indices.graphicsFamily.value(), 0, &graphicsQueue);
-	vkGetDeviceQueue(device, family_indices.presentFamily.value(), 0, &presentQueue);
 }
 
 VkSurfaceFormatKHR EclipsRenderer::chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& available_formats) {
@@ -1451,34 +1355,12 @@ std::vector<char> EclipsRenderer::readFile(const std::string& filename) {
 	return buffer;
 }
 
-QueueFamilyIndices EclipsRenderer::findQueueFamilies(VkPhysicalDevice device) {
-	QueueFamilyIndices family_indices;
-	uint32_t queue_family_count = 0;
-	vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, nullptr);
-
-	std::vector<VkQueueFamilyProperties> queue_families(queue_family_count);
-	vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, queue_families.data());
-
-	int i = 0;
-	for (const auto& queue_family : queue_families) {
-		if (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT) family_indices.graphicsFamily = i;
-
-		VkBool32 present_support = false;
-		vkGetPhysicalDeviceSurfaceSupportKHR(device, i, eclipsSurface.getSurface(), &present_support);
-		if (present_support) family_indices.presentFamily = i;
-
-		if (family_indices.isComplete()) break;
-		i++;
-	}
-	return family_indices;
-}
-
 void EclipsRenderer::drawFrame() {
-	vkWaitForFences(device, 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
+	vkWaitForFences(eclipsDevice.getLogicalDevice(), 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
 
 	uint32_t image_index;
 
-	VkResult result = vkAcquireNextImageKHR(device, m_swapChain, UINT64_MAX, m_imageAvailableSemaphores[m_currentFrame], VK_NULL_HANDLE, &image_index);
+	VkResult result = vkAcquireNextImageKHR(eclipsDevice.getLogicalDevice(), m_swapChain, UINT64_MAX, m_imageAvailableSemaphores[m_currentFrame], VK_NULL_HANDLE, &image_index);
 
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_framebufferResized) {
 		m_framebufferResized = false;
@@ -1489,7 +1371,7 @@ void EclipsRenderer::drawFrame() {
 		throw std::runtime_error("failed to acquire swap chain image!");
 	}
 
-	vkResetFences(device, 1, &m_inFlightFences[m_currentFrame]);
+	vkResetFences(eclipsDevice.getLogicalDevice(), 1, &m_inFlightFences[m_currentFrame]);
 
 	vkResetCommandBuffer(commandBuffers[m_currentFrame], 0);
 
@@ -1525,11 +1407,11 @@ void EclipsRenderer::drawFrame() {
 	present_info.pImageIndices = &image_index;
 	present_info.pResults = nullptr;
 
-	if (vkQueueSubmit(graphicsQueue, 1, &submit_info, m_inFlightFences[m_currentFrame]) != VK_SUCCESS) {
+	if (vkQueueSubmit(eclipsQueue.getGraphicsQueue(), 1, &submit_info, m_inFlightFences[m_currentFrame]) != VK_SUCCESS) {
 		throw std::runtime_error("failed to submit draw command buffer!");
 	}
 
-	result = vkQueuePresentKHR(presentQueue, &present_info);
+	result = vkQueuePresentKHR(eclipsQueue.getPresentQueue(), &present_info);
 
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
 		recreateSwapChain();
@@ -1573,47 +1455,47 @@ void EclipsRenderer::destroyRenderer() {
 
 	// Wait for the device to finish all operations before cleanup
 	// Otherwise we might destroy resources that are still in use 
-	vkDeviceWaitIdle(device);
+	vkDeviceWaitIdle(eclipsDevice.getLogicalDevice());
 
 	cleanupSwapChain();
 
-	vkDestroySampler(device, textureSampler, nullptr);
-	vkDestroyImageView(device, textureImageView, nullptr);
+	vkDestroySampler(eclipsDevice.getLogicalDevice(), textureSampler, nullptr);
+	vkDestroyImageView(eclipsDevice.getLogicalDevice(), textureImageView, nullptr);
 
-	vkDestroyImage(device, textureImage, nullptr);
-	vkFreeMemory(device, textureImageMemory, nullptr);
+	vkDestroyImage(eclipsDevice.getLogicalDevice(), textureImage, nullptr);
+	vkFreeMemory(eclipsDevice.getLogicalDevice(), textureImageMemory, nullptr);
 
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
 	{
 		{
-			vkDestroyBuffer(device, uniformBuffers[i], nullptr);
-			vkFreeMemory(device, uniformBuffersMemory[i], nullptr);
+			vkDestroyBuffer(eclipsDevice.getLogicalDevice(), uniformBuffers[i], nullptr);
+			vkFreeMemory(eclipsDevice.getLogicalDevice(), uniformBuffersMemory[i], nullptr);
 		}
 	}
-	vkDestroyDescriptorPool(device, descriptorPool, nullptr);
+	vkDestroyDescriptorPool(eclipsDevice.getLogicalDevice(), descriptorPool, nullptr);
 
-	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
+	vkDestroyDescriptorSetLayout(eclipsDevice.getLogicalDevice(), descriptorSetLayout, nullptr);
 
-	vkDestroyBuffer(device, indexBuffer, nullptr);
-	vkFreeMemory(device, indexBufferMemory, nullptr);
+	vkDestroyBuffer(eclipsDevice.getLogicalDevice(), indexBuffer, nullptr);
+	vkFreeMemory(eclipsDevice.getLogicalDevice(), indexBufferMemory, nullptr);
 
-	vkDestroyBuffer(device, m_vertexBuffer, nullptr);
-	vkFreeMemory(device, m_vertexBufferMemory, nullptr);
+	vkDestroyBuffer(eclipsDevice.getLogicalDevice(), m_vertexBuffer, nullptr);
+	vkFreeMemory(eclipsDevice.getLogicalDevice(), m_vertexBufferMemory, nullptr);
 
-	vkDestroyPipeline(device, m_graphicsPipeline, nullptr);
-	vkDestroyPipelineLayout(device, m_pipelineLayout, nullptr);
+	vkDestroyPipeline(eclipsDevice.getLogicalDevice(), m_graphicsPipeline, nullptr);
+	vkDestroyPipelineLayout(eclipsDevice.getLogicalDevice(), m_pipelineLayout, nullptr);
 
-	vkDestroyRenderPass(device, renderPass, nullptr);
+	vkDestroyRenderPass(eclipsDevice.getLogicalDevice(), renderPass, nullptr);
 
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		vkDestroySemaphore(device, m_renderFinishedSemaphores[i], nullptr);
-		vkDestroySemaphore(device, m_imageAvailableSemaphores[i], nullptr);
-		vkDestroyFence(device, m_inFlightFences[i], nullptr);
+		vkDestroySemaphore(eclipsDevice.getLogicalDevice(), m_renderFinishedSemaphores[i], nullptr);
+		vkDestroySemaphore(eclipsDevice.getLogicalDevice(), m_imageAvailableSemaphores[i], nullptr);
+		vkDestroyFence(eclipsDevice.getLogicalDevice(), m_inFlightFences[i], nullptr);
 	}
 
-	vkDestroyCommandPool(device, commandPool, nullptr);
+	vkDestroyCommandPool(eclipsDevice.getLogicalDevice(), commandPool, nullptr);
 
-	vkDestroyDevice(device, nullptr);
+	vkDestroyDevice(eclipsDevice.getLogicalDevice(), nullptr);
 
 	eclipsDebug.destroyEclipsDebug(eclipsInstance->getInstance());
 	eclipsSurface.destroySurface(eclipsInstance->getInstance());

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -19,8 +19,14 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <None Include="shaders\shader.frag" />
+    <None Include="shaders\shader.vert" />
+  </ItemGroup>
+  <ItemGroup>
     <ClCompile Include="src\EclipsDebug.cpp" />
+    <ClCompile Include="src\EclipsDevice.cpp" />
     <ClCompile Include="src\EclipsInstance.cpp" />
+    <ClCompile Include="src\EclipsQueue.cpp" />
     <ClCompile Include="src\EclipsRenderer.cpp" />
     <ClCompile Include="src\EclipsSurface.cpp" />
     <ClCompile Include="src\EclipsWindow.cpp" />
@@ -31,15 +37,13 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\EclipsDebug.h" />
+    <ClInclude Include="src\EclipsDevice.h" />
     <ClInclude Include="src\EclipsInstance.h" />
+    <ClInclude Include="src\EclipsQueue.h" />
     <ClInclude Include="src\EclipsRenderer.h" />
     <ClInclude Include="src\EclipsSurface.h" />
     <ClInclude Include="src\EclipsWindow.h" />
     <ClInclude Include="src\pch.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="shaders\shader.frag" />
-    <None Include="shaders\shader.vert" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>18.0</VCProjectVersion>
