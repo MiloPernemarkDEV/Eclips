@@ -23,12 +23,16 @@
     <None Include="shaders\shader.vert" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\EclipsCommandPool.cpp" />
     <ClCompile Include="src\EclipsDebug.cpp" />
     <ClCompile Include="src\EclipsDevice.cpp" />
+    <ClCompile Include="src\EclipsImage.cpp" />
     <ClCompile Include="src\EclipsInstance.cpp" />
+    <ClCompile Include="src\EclipsMemory.cpp" />
     <ClCompile Include="src\EclipsQueue.cpp" />
     <ClCompile Include="src\EclipsRenderer.cpp" />
     <ClCompile Include="src\EclipsSurface.cpp" />
+    <ClCompile Include="src\EclipsSwapchain.cpp" />
     <ClCompile Include="src\EclipsWindow.cpp" />
     <ClCompile Include="src\pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
@@ -36,12 +40,16 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\EclipsCommandPool.h" />
     <ClInclude Include="src\EclipsDebug.h" />
     <ClInclude Include="src\EclipsDevice.h" />
+    <ClInclude Include="src\EclipsImage.h" />
     <ClInclude Include="src\EclipsInstance.h" />
+    <ClInclude Include="src\EclipsMemory.h" />
     <ClInclude Include="src\EclipsQueue.h" />
     <ClInclude Include="src\EclipsRenderer.h" />
     <ClInclude Include="src\EclipsSurface.h" />
+    <ClInclude Include="src\EclipsSwapchain.h" />
     <ClInclude Include="src\EclipsWindow.h" />
     <ClInclude Include="src\pch.h" />
   </ItemGroup>

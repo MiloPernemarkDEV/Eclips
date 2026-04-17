@@ -35,8 +35,12 @@
 #include "EclipsSurface.h"
 #include "EclipsDevice.h"
 #include "EclipsQueue.h"
+#include "EclipsCommandPool.h"
+#include "EclipsSwapchain.h"
+#include "EclipsImage.h"
+#include "EclipsMemory.h"
 
-constexpr int MAX_FRAMES_IN_FLIGHT = 2;
+const int MAX_FRAMES_IN_FLIGHT = 2;
 
 const std::string MODEL_PATH_VIKING_ROOM = "assets/viking_room.obj";
 const std::string TEXTURE_PATH = "textures/viking_room.png";
@@ -46,12 +50,6 @@ struct UniformBufferObject
 	alignas(16)glm::mat4 model;
 	alignas(16)glm::mat4 view;
 	alignas(16)glm::mat4 proj;
-};
-
-struct SwapChainSupportDetails {
-	VkSurfaceCapabilitiesKHR capabilities;
-	std::vector<VkSurfaceFormatKHR> formats;
-	std::vector<VkPresentModeKHR> presentModes;
 };
 
 struct Vertex
@@ -121,15 +119,14 @@ private:
 	GLFWwindow* window;
 	EclipsDebug eclipsDebug;
 	EclipsSurface eclipsSurface;
-	EclipsDevice eclipsDevice;
 	EclipsQueue eclipsQueue;
+	EclipsDevice eclipsDevice;
+	EclipsCommandPool eclipsCommandPool;
+	EclipsSwapchain eclipsSwapchain;
+	EclipsImage eclipsImage;
+	EclipsMemory eclipsMemory;
 
-	// Swap Chain
-	VkSwapchainKHR m_swapChain = VK_NULL_HANDLE;
-	std::vector<VkImage> swapChainImages;
-	VkFormat swapChainImageFormat = {};
-	VkExtent2D swapChainExtent = {};
-	std::vector<VkImageView> swapChainImageViews;
+
 	std::vector<VkFramebuffer> swapChainFramebuffers;
 	VkPipeline m_graphicsPipeline = VK_NULL_HANDLE;
 	VkRenderPass renderPass = VK_NULL_HANDLE;
@@ -137,7 +134,6 @@ private:
 	VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
 
 	//  Synchronization
-	VkCommandPool commandPool = VK_NULL_HANDLE;
 	std::vector<VkCommandBuffer> commandBuffers;
 
 	std::vector<VkSemaphore> m_imageAvailableSemaphores;
@@ -194,17 +190,10 @@ private:
 	VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
 	void createDepthResources();
 	void createTextureSampler();
-	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
 	void createTextureImageView();
 	void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels);
-
-	VkCommandBuffer beginSingleTimeCommands();
-	void endSingleTimeCommands(VkCommandBuffer commandBuffer);
 	void createTextureImage();
-
-	void createImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage,
-		VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
 
 	void createDescriptorSets();
 	void createDescriptorPool();
@@ -228,9 +217,6 @@ private:
 	void createCommandBuffer();
 	void recordCommandBuffer(VkCommandBuffer command_buffer, uint32_t image_index);
 
-
-	void createCommandpool();
-
 	void createFrameBuffers();
 
 	void createRenderPass();
@@ -238,22 +224,7 @@ private:
 	void createGraphicsPipeline();
 
 	VkShaderModule createShaderModule(const std::vector<char>& code);
-
-	void createImageViews();
-
-	void createSwapChain();
-
-	uint32_t findMemoryType(uint32_t type_filter, VkMemoryPropertyFlags properties);
-
 	void cleanupSwapChain();
-
-	VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& available_formats);
-
-	VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& available_present_modes);
-
-	VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
-
-	SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
 
 	static std::vector<char> readFile(const std::string& filename);
 

@@ -1,15 +1,17 @@
 #include "pch.h"
 #include "EclipsDevice.h"
 #include "EclipsDebug.h"
+#include "EclipsQueue.h"
+#include "EclipsSwapchain.h"
 #include <set>
 
 
-EclipsDevice::EclipsDevice(EclipsQueue& eclipsQueue, EclipsSurface& eclipsSurface)
-	: eclipsQueue(&eclipsQueue), eclipsSurface(&eclipsSurface), physicalDevice(VK_NULL_HANDLE), device(VK_NULL_HANDLE)
+EclipsDevice::EclipsDevice(EclipsSurface& eclipsSurface)
+	:  eclipsSurface(&eclipsSurface), physicalDevice(VK_NULL_HANDLE), device(VK_NULL_HANDLE)
 {
 }
 
-void EclipsDevice::pickPhysicalDevice(VkInstance instance)
+void EclipsDevice::pickPhysicalDevice(VkInstance instance, EclipsQueue& eclipsQueue, EclipsSwapchain& eclipsSwapchain)
 {
 	uint32_t device_count = 0;
 	vkEnumeratePhysicalDevices(instance, &device_count, nullptr);
@@ -20,7 +22,7 @@ void EclipsDevice::pickPhysicalDevice(VkInstance instance)
 	vkEnumeratePhysicalDevices(instance, &device_count, devices.data());
 
 	for (const auto& device : devices) {
-		if (isDeviceSuitable(device)) {
+		if (isDeviceSuitable(device, eclipsQueue, eclipsSwapchain)) {
 			physicalDevice = device;
 			// msaaSamples = getMaxUsableSampleCount();
 			break;
@@ -33,15 +35,15 @@ void EclipsDevice::pickPhysicalDevice(VkInstance instance)
 	}
 }
 
-bool EclipsDevice::isDeviceSuitable(VkPhysicalDevice device)
+bool EclipsDevice::isDeviceSuitable(VkPhysicalDevice device, EclipsQueue& eclipsQueue, EclipsSwapchain& eclipsSwapchain)
 {
-	QueueFamilyIndices indices = eclipsQueue->findQueueFamilies(device, eclipsSurface->getSurface());
+	QueueFamilyIndices indices = eclipsQueue.findQueueFamilies(device, eclipsSurface->getSurface());
 	bool extensions_supported = checkDeviceExtensionSupport(device);
 
 	bool swap_chain_adequate = false;
 	if (extensions_supported) {
-		// SwapChainSupportDetails swap_chain_support = querySwapChainSupport(device);
-		// swap_chain_adequate = !swap_chain_support.formats.empty() && !swap_chain_support.presentModes.empty();
+		SwapChainSupportDetails swap_chain_support = eclipsSwapchain.querySwapChainSupport(device, eclipsSurface->getSurface());
+		swap_chain_adequate = !swap_chain_support.formats.empty() && !swap_chain_support.presentModes.empty();
 	}
 
 	VkPhysicalDeviceFeatures supportedFeatures;
@@ -64,9 +66,9 @@ bool EclipsDevice::checkDeviceExtensionSupport(VkPhysicalDevice device)
 	return required_extensions.empty();
 }
 
-void EclipsDevice::createLogicalDevice(EclipsDebug& eclipsDebug, VkSurfaceKHR surface)
+void EclipsDevice::createLogicalDevice(EclipsDebug& eclipsDebug, VkSurfaceKHR surface, EclipsDevice& eclipsDevice, EclipsQueue& eclipsQueue)
 {
-	QueueFamilyIndices family_indices = eclipsQueue->findQueueFamilies(physicalDevice, surface);
+	QueueFamilyIndices family_indices = eclipsQueue.findQueueFamilies(eclipsDevice.getPhysicalDevice(), surface);
 	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
 	std::set<uint32_t> uniqueQueueFamilies = { family_indices.graphicsFamily.value(), family_indices.presentFamily.value() };
 
@@ -100,9 +102,6 @@ void EclipsDevice::createLogicalDevice(EclipsDebug& eclipsDebug, VkSurfaceKHR su
 		throw std::runtime_error("failed to create logical device");
 	}
 
-	VkQueue graphicsQueue = eclipsQueue->getGraphicsQueue();
-	VkQueue presentQueue = eclipsQueue->getPresentQueue();
-
-	vkGetDeviceQueue(device, family_indices.graphicsFamily.value(), 0, &graphicsQueue);
-	vkGetDeviceQueue(device, family_indices.presentFamily.value(), 0, &presentQueue);
+	vkGetDeviceQueue(device, family_indices.graphicsFamily.value(), 0, &eclipsQueue.getGraphicsQueue());
+	vkGetDeviceQueue(device, family_indices.presentFamily.value(), 0, &eclipsQueue.getPresentQueue());
 }

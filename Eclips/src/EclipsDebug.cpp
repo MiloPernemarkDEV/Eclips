@@ -21,7 +21,7 @@ void EclipsDebug::populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateIn
 	create_info.pUserData = nullptr;
 }
 
-void EclipsDebug::destroyEclipsDebug(VkInstance instance)
+void EclipsDebug::destroyDebug(VkInstance instance)
 {
 	if (enableValidationLayers && debugMessenger != VK_NULL_HANDLE) {
 		DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);

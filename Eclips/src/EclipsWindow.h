@@ -3,8 +3,8 @@
 
 #include <GLFW/glfw3.h>
 
-constexpr uint32_t WIDTH = 1280;
-constexpr uint32_t HEIGHT = 720;
+constexpr uint32_t WIDTH = 1920;
+constexpr uint32_t HEIGHT = 1080;
 
 class EclipsWindow {
 public:

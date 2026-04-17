@@ -3,6 +3,7 @@
 
 #include <vulkan/vulkan.h>
 #include <optional>
+#include "EclipsDevice.h"
 
 struct QueueFamilyIndices {
 	std::optional<uint32_t> graphicsFamily;
@@ -15,9 +16,9 @@ struct QueueFamilyIndices {
 
 class EclipsQueue {
 public:
-	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface);
-	VkQueue getGraphicsQueue()  { return graphicsQueue; };
-	VkQueue getPresentQueue()  { return presentQueue; };
+	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface);
+	VkQueue& getGraphicsQueue() { return graphicsQueue; }
+	VkQueue& getPresentQueue() { return presentQueue; }
 private:
 	VkQueue graphicsQueue = VK_NULL_HANDLE;
 	VkQueue presentQueue = VK_NULL_HANDLE;

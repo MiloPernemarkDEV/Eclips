@@ -7,7 +7,7 @@
 #include "tiny_obj_loader.h"
 
 EclipsRenderer::EclipsRenderer(EclipsInstance& eclipsInstance, EclipsWindow& eclipsWindow)
-	: eclipsDebug(true), eclipsSurface(eclipsWindow), eclipsInstance(&eclipsInstance), eclipsDevice(eclipsQueue, eclipsSurface)
+	: eclipsDebug(true), eclipsSurface(eclipsWindow), eclipsInstance(&eclipsInstance), eclipsDevice(eclipsSurface)
 {
 }
 
@@ -23,12 +23,17 @@ void EclipsRenderer::initVulkan() {
 	eclipsDebug.setupDebugMessenger(eclipsInstance->getInstance());
 	eclipsSurface.createSurface(eclipsInstance->getInstance());
 
-	eclipsDevice.pickPhysicalDevice(eclipsInstance->getInstance());
-	eclipsDevice.createLogicalDevice(eclipsDebug, eclipsSurface.getSurface());
+	eclipsDevice.pickPhysicalDevice(eclipsInstance->getInstance(), eclipsQueue, eclipsSwapchain);
+	eclipsDevice.createLogicalDevice(eclipsDebug, eclipsSurface.getSurface(), eclipsDevice, eclipsQueue);
 
-	createCommandpool();
-	createSwapChain();
-	createImageViews();
+	eclipsCommandPool.createCommandPool(eclipsQueue, eclipsDevice, eclipsSurface);
+
+	eclipsSwapchain.createSwapchain(eclipsDevice.getPhysicalDevice(), eclipsDevice.getLogicalDevice(), 
+		eclipsSurface.getSurface(), eclipsQueue, window);
+
+	eclipsSwapchain.createImageViews(eclipsImage, eclipsDevice);
+
+	msaaSamples = getMaxUsableSampleCount();
 	createRenderPass();
 	createDescriptorSetLayout();
 	createGraphicsPipeline();
@@ -51,12 +56,13 @@ void EclipsRenderer::initVulkan() {
 
 void EclipsRenderer::createColorResources()
 {
-	VkFormat colorFormat = swapChainImageFormat;
+	VkFormat colorFormat = eclipsSwapchain.getSwapchainImageFormat();
 
-	createImage(swapChainExtent.width, swapChainExtent.height, 1, msaaSamples, colorFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, colorImage, colorImageMemory);
-	colorImageView = createImageView(colorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+	VkExtent2D swapChainExtent = eclipsSwapchain.getSwapChainExtent();
+	eclipsImage.createImage(swapChainExtent.width, swapChainExtent.height, 1, msaaSamples, colorFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 
+		colorImage, colorImageMemory, eclipsDevice, eclipsMemory);
 
-
+	colorImageView = eclipsImage.createImageView(colorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1, eclipsDevice);
 }
 
 VkSampleCountFlagBits EclipsRenderer::getMaxUsableSampleCount()
@@ -88,7 +94,7 @@ void EclipsRenderer::generateMipmaps(VkImage image, int32_t texWidth, VkFormat i
 		throw std::runtime_error("texture image format does not support linear blitting!");
 	}
 
-	VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+	VkCommandBuffer commandBuffer = eclipsCommandPool.beginSingleTimeCommands(eclipsDevice);
 	VkImageMemoryBarrier barrier{};
 
 	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -163,7 +169,7 @@ void EclipsRenderer::generateMipmaps(VkImage image, int32_t texWidth, VkFormat i
 		0, nullptr,
 		1, &barrier);
 
-	endSingleTimeCommands(commandBuffer);
+	eclipsCommandPool.endSingleTimeCommands(commandBuffer, eclipsDevice, eclipsQueue);
 }
 
 // OBJ: positions, texture coordinates and faces
@@ -244,52 +250,36 @@ VkFormat EclipsRenderer::findSupportedFormat(const std::vector<VkFormat>& candid
 void EclipsRenderer::createDepthResources()
 {
 	VkFormat depthFormat = findDepthFormat();
+	
+	VkExtent2D swapChainExtent = eclipsSwapchain.getSwapChainExtent();
+	eclipsImage.createImage(swapChainExtent.width, swapChainExtent.height, 1, msaaSamples, depthFormat, VK_IMAGE_TILING_OPTIMAL, 
+		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depthImage, depthImageMemory, eclipsDevice, eclipsMemory);
 
-	createImage(swapChainExtent.width, swapChainExtent.height, 1, msaaSamples, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depthImage, depthImageMemory);
-	depthImageView = createImageView(depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
+	depthImageView = eclipsImage.createImageView(depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1, eclipsDevice);
 }
 
-// TODO: 
-// Probably should query device properties outside the function and pass it around 
-// Add support for varying texture resulotions: samplerInfo.unnormalizedCoordinates
 void EclipsRenderer::createTextureSampler() {
 	VkSamplerCreateInfo samplerInfo{};
 	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-
-	// magFilter & minFilter specify how to interpolate texels that are magnified or minified. 
-	// Magnification creates the oversampling problem 
-	// Minification creates the undersampling problem 
 	samplerInfo.magFilter = VK_FILTER_LINEAR;
 	samplerInfo.minFilter = VK_FILTER_LINEAR;
-
-	// Adressing mode determines what happens when we try to read texels outside the image 
-	// Repeat mode is most commonly used because it can be used to tile textures like floors and walls
 	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 
-	// We want to use anistropic filtering to help with undersampling
-	// We need to query for max possible anisotropy level, the properties has a member called limits.
-	// Limits has a member called maxSamplerAnisotropy, if we want to go for max quality we can simply use that value, 
-	// But we can also choose a lower value for better performance
 	VkPhysicalDeviceProperties properties{};
 	vkGetPhysicalDeviceProperties(eclipsDevice.getPhysicalDevice(), &properties);
 	samplerInfo.anisotropyEnable = VK_TRUE;
 	samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
 
-	// Specifies which color is returned when sampling beyond the image with clamp to border adressing mode. 
-	// Since we are using repeat mode, this value is not relevant but we have to set it anyway
 	samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
 
-	// Specifices which coordinate system we want to use to adress texels in an image 
-	// Change this to true later to use textures of varying resulations with the same coordinates
 	samplerInfo.unnormalizedCoordinates = VK_FALSE;
 
-	// used for percantage closer filtering on shadow maps 
 	samplerInfo.compareEnable = VK_FALSE;
 	samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
 
-	// Will come back to mimpapping later
 	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 	samplerInfo.mipLodBias = 0.0f;
 	samplerInfo.minLod = 0.0f;
@@ -300,32 +290,12 @@ void EclipsRenderer::createTextureSampler() {
 	}
 }
 
-VkImageView EclipsRenderer::createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels) {
-	VkImageViewCreateInfo viewInfo{};
-	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-	viewInfo.image = image;
-	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-	viewInfo.format = format;
-	viewInfo.subresourceRange.aspectMask = aspectFlags;
-	viewInfo.subresourceRange.baseMipLevel = 0;
-	viewInfo.subresourceRange.levelCount = mipLevels;
-	viewInfo.subresourceRange.baseArrayLayer = 0;
-	viewInfo.subresourceRange.layerCount = 1;
-
-	VkImageView imageView;
-	if (vkCreateImageView(eclipsDevice.getLogicalDevice(), &viewInfo, nullptr, &imageView) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create image view!");
-	}
-
-	return imageView;
-}
-
 void EclipsRenderer::createTextureImageView() {
-	textureImageView = createImageView(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, mipLevels);
+	textureImageView = eclipsImage.createImageView(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, mipLevels, eclipsDevice);
 }
 
 void EclipsRenderer::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height) {
-	VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+	VkCommandBuffer commandBuffer = eclipsCommandPool.beginSingleTimeCommands(eclipsDevice);
 
 	VkBufferImageCopy region{};
 	region.bufferOffset = 0;
@@ -353,11 +323,11 @@ void EclipsRenderer::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t 
 		&region
 	);
 
-	endSingleTimeCommands(commandBuffer);
+	eclipsCommandPool.endSingleTimeCommands(commandBuffer, eclipsDevice, eclipsQueue);
 }
 
 void EclipsRenderer::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels) {
-	VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+	VkCommandBuffer commandBuffer = eclipsCommandPool.beginSingleTimeCommands(eclipsDevice);
 
 	// Modern GPUs and CPUs don’t always write directly to main memory 
 	// Writes may stay L1/L2 and not be immediately visible to other GPU operations.
@@ -376,7 +346,7 @@ void EclipsRenderer::transitionImageLayout(VkImage image, VkFormat format, VkIma
 	barrier.image = image;
 	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 	barrier.subresourceRange.baseMipLevel = 0;
-	barrier.subresourceRange.levelCount = 1;
+	barrier.subresourceRange.levelCount = mipLevels;
 	barrier.subresourceRange.baseArrayLayer = 0;
 	barrier.subresourceRange.layerCount = 1;
 
@@ -434,40 +404,7 @@ void EclipsRenderer::transitionImageLayout(VkImage image, VkFormat format, VkIma
 		0, nullptr,
 		1, &barrier
 	);
-	endSingleTimeCommands(commandBuffer);
-}
-
-VkCommandBuffer EclipsRenderer::beginSingleTimeCommands()
-{
-	VkCommandBufferAllocateInfo allocInfo = {};
-	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandPool = commandPool;
-	allocInfo.commandBufferCount = 1;
-
-	VkCommandBuffer command_buffer{};
-	vkAllocateCommandBuffers(eclipsDevice.getLogicalDevice(), &allocInfo, &command_buffer);
-
-	VkCommandBufferBeginInfo begin_info{};
-	begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-	vkBeginCommandBuffer(command_buffer, &begin_info);
-	return command_buffer;
-}
-
-void EclipsRenderer::endSingleTimeCommands(VkCommandBuffer commandBuffer) {
-	vkEndCommandBuffer(commandBuffer);
-
-	VkSubmitInfo submitInfo{};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &commandBuffer;
-
-	vkQueueSubmit(eclipsQueue.getGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
-	vkQueueWaitIdle(eclipsQueue.getGraphicsQueue());
-
-	vkFreeCommandBuffers(eclipsDevice.getLogicalDevice(), commandPool, 1, &commandBuffer);
+	eclipsCommandPool.endSingleTimeCommands(commandBuffer, eclipsDevice, eclipsQueue);
 }
 
 void EclipsRenderer::createTextureImage()
@@ -502,14 +439,13 @@ void EclipsRenderer::createTextureImage()
 	// As we have copied the original pixel data to the buffer we can free it now 
 	stbi_image_free(pixels);
 
-	createImage(texWidth, texHeight, mipLevels, VK_SAMPLE_COUNT_1_BIT,
+	eclipsImage.createImage(texWidth, texHeight, mipLevels, VK_SAMPLE_COUNT_1_BIT,
 		VK_FORMAT_R8G8B8A8_SRGB,
 		VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImage, textureImageMemory);
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImage, textureImageMemory, eclipsDevice, eclipsMemory);
 
-	copyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
-
+	
 	transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, mipLevels);
 	copyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
 	//transitioned to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL while generating mipmaps
@@ -519,42 +455,6 @@ void EclipsRenderer::createTextureImage()
 	vkDestroyBuffer(eclipsDevice.getLogicalDevice(), stagingBuffer, nullptr);
 	vkFreeMemory(eclipsDevice.getLogicalDevice(), stagingBufferMemory, nullptr);
 }
-
-void EclipsRenderer::createImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory) {
-	VkImageCreateInfo imageInfo{};
-	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-	imageInfo.imageType = VK_IMAGE_TYPE_2D;
-	imageInfo.extent.width = width;
-	imageInfo.extent.height = height;
-	imageInfo.extent.depth = 1;
-	imageInfo.mipLevels = mipLevels;
-	imageInfo.arrayLayers = 1;
-	imageInfo.format = format;
-	imageInfo.tiling = tiling;
-	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	imageInfo.usage = usage;
-	imageInfo.samples = numSamples;
-	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-	if (vkCreateImage(eclipsDevice.getLogicalDevice(), &imageInfo, nullptr, &image) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create image!");
-	}
-
-	VkMemoryRequirements memRequirements;
-	vkGetImageMemoryRequirements(eclipsDevice.getLogicalDevice(), image, &memRequirements);
-
-	VkMemoryAllocateInfo allocInfo{};
-	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	allocInfo.allocationSize = memRequirements.size;
-	allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
-
-	if (vkAllocateMemory(eclipsDevice.getLogicalDevice(), &allocInfo, nullptr, &imageMemory) != VK_SUCCESS) {
-		throw std::runtime_error("failed to allocate image memory!");
-	}
-
-	vkBindImageMemory(eclipsDevice.getLogicalDevice(), image, imageMemory, 0);
-}
-
 /**
 	* Allocate one descriptor set for each frame in flight, all with the same layout.
 	* They will be freed when the pool is destroyed
@@ -721,7 +621,7 @@ void EclipsRenderer::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, V
 	VkMemoryAllocateInfo allocInfo = {};
 	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	allocInfo.allocationSize = memRequirements.size;
-	allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
+	allocInfo.memoryTypeIndex = eclipsMemory.findMemoryType(memRequirements.memoryTypeBits, properties, eclipsDevice);
 
 	if (vkAllocateMemory(eclipsDevice.getLogicalDevice(), &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS)
 	{
@@ -732,13 +632,13 @@ void EclipsRenderer::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, V
 }
 
 void EclipsRenderer::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
-	VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+	VkCommandBuffer commandBuffer = eclipsCommandPool.beginSingleTimeCommands(eclipsDevice);
 
 	VkBufferCopy copyRegion{};
 	copyRegion.size = size;
 	vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
 
-	endSingleTimeCommands(commandBuffer);
+	eclipsCommandPool.endSingleTimeCommands(commandBuffer, eclipsDevice, eclipsQueue);
 }
 
 void EclipsRenderer::createVertexBuffer() {
@@ -762,27 +662,6 @@ void EclipsRenderer::createVertexBuffer() {
 	vkFreeMemory(eclipsDevice.getLogicalDevice(), staging_buffer_memory, nullptr);
 }
 
-uint32_t EclipsRenderer::findMemoryType(uint32_t type_filter, VkMemoryPropertyFlags properties)
-{
-	VkPhysicalDeviceMemoryProperties mem_properties;
-	vkGetPhysicalDeviceMemoryProperties(eclipsDevice.getPhysicalDevice(), &mem_properties);
-
-	for (uint32_t i = 0; i < mem_properties.memoryTypeCount; i++) {
-		if ((type_filter & (1 << i)) && (mem_properties.memoryTypes[i].propertyFlags & properties) == properties) {
-			return i;
-		}
-	}
-	std::cout << "type_filter = " << type_filter << std::endl;
-	std::cout << "requested properties = " << properties << std::endl;
-
-	for (uint32_t i = 0; i < mem_properties.memoryTypeCount; i++) {
-		std::cout << "Memory type " << i
-			<< " flags = " << mem_properties.memoryTypes[i].propertyFlags
-			<< std::endl;
-	}
-	throw std::runtime_error("failed to find suitable memory type!");
-}
-
 void EclipsRenderer::cleanupSwapChain() {
 	vkDestroyImageView(eclipsDevice.getLogicalDevice(), colorImageView, nullptr);
 	vkDestroyImage(eclipsDevice.getLogicalDevice(), colorImage, nullptr);
@@ -795,11 +674,11 @@ void EclipsRenderer::cleanupSwapChain() {
 		vkDestroyFramebuffer(eclipsDevice.getLogicalDevice(), framebuffer, nullptr);
 	}
 
-	for (auto image_view : swapChainImageViews) {
+	for (auto image_view : eclipsSwapchain.getSwapchainImageViews()) {
 		vkDestroyImageView(eclipsDevice.getLogicalDevice(), image_view, nullptr);
 	}
 
-	vkDestroySwapchainKHR(eclipsDevice.getLogicalDevice(), m_swapChain, nullptr);
+	vkDestroySwapchainKHR(eclipsDevice.getLogicalDevice(), eclipsSwapchain.getSwapchain(), nullptr);
 }
 
 void EclipsRenderer::recreateSwapChain() {
@@ -813,11 +692,15 @@ void EclipsRenderer::recreateSwapChain() {
 
 	cleanupSwapChain();
 
-	createSwapChain();
-	createImageViews();
+	eclipsSwapchain.createSwapchain(eclipsDevice.getPhysicalDevice(), eclipsDevice.getLogicalDevice(), 
+		eclipsSurface.getSurface(), eclipsQueue, window);
+
+	eclipsSwapchain.createImageViews(eclipsImage, eclipsDevice);
 	createColorResources();
 	createDepthResources();
 	createFrameBuffers();
+
+	createCommandBuffer();
 }
 
 /**
@@ -826,6 +709,8 @@ void EclipsRenderer::recreateSwapChain() {
 */
 void EclipsRenderer::createSyncObjects() {
 	m_imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+
+	std::vector<VkImage> swapChainImages = eclipsSwapchain.getSwapchainImages();
 	m_renderFinishedSemaphores.resize(swapChainImages.size());
 	m_inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
 
@@ -850,18 +735,18 @@ void EclipsRenderer::createSyncObjects() {
 	}
 }
 
-void EclipsRenderer::createCommandBuffer() {
-	commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-	VkCommandBufferAllocateInfo alloc_info{};
-	alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	alloc_info.commandPool = commandPool;
-	alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	alloc_info.commandBufferCount = (uint32_t)commandBuffers.size();
+	void EclipsRenderer::createCommandBuffer() {
+		commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+		VkCommandBufferAllocateInfo alloc_info{};
+		alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		alloc_info.commandPool = eclipsCommandPool.getCommandPool();
+		alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		alloc_info.commandBufferCount = (uint32_t)commandBuffers.size();
 
-	if (vkAllocateCommandBuffers(eclipsDevice.getLogicalDevice(), &alloc_info, commandBuffers.data()) != VK_SUCCESS) {
-		throw std::runtime_error("failed to allocate command buffers!");
+		if (vkAllocateCommandBuffers(eclipsDevice.getLogicalDevice(), &alloc_info, commandBuffers.data()) != VK_SUCCESS) {
+			throw std::runtime_error("failed to allocate command buffers!");
+		}
 	}
-}
 
 /**
 	* @brief Records commands into a primary command buffer.
@@ -882,14 +767,14 @@ void EclipsRenderer::recordCommandBuffer(VkCommandBuffer command_buffer, uint32_
 	if (vkBeginCommandBuffer(command_buffer, &beginInfo) != VK_SUCCESS) {
 		throw std::runtime_error("failed to begin recording command buffer!");
 	}
-
+	
 	VkRenderPassBeginInfo renderPassInfo{};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 	renderPassInfo.renderPass = renderPass;
 	renderPassInfo.framebuffer = swapChainFramebuffers[image_index];
 
 	renderPassInfo.renderArea.offset = { 0, 0 };
-	renderPassInfo.renderArea.extent = swapChainExtent;
+	renderPassInfo.renderArea.extent = eclipsSwapchain.getSwapChainExtent();;
 
 	std::array<VkClearValue, 2> clearValues{};
 	clearValues[0].color = { {0.07f, 0.13f, 0.17f, 1.0f} };
@@ -913,16 +798,20 @@ void EclipsRenderer::recordCommandBuffer(VkCommandBuffer command_buffer, uint32_
 	VkViewport viewport{};
 	viewport.x = 0.0f;
 	viewport.y = 0.0f;
-	viewport.width = static_cast<float>(swapChainExtent.width);
-	viewport.height = static_cast<float>(swapChainExtent.height);
+	viewport.width = static_cast<float>(eclipsSwapchain.getSwapChainExtent().width);
+	viewport.height = static_cast<float>(eclipsSwapchain.getSwapChainExtent().height);
 	viewport.minDepth = 0.0f;
 	viewport.maxDepth = 1.0f;
 	vkCmdSetViewport(command_buffer, 0, 1, &viewport);
 
 	VkRect2D scissor{};
 	scissor.offset = { 0, 0 };
-	scissor.extent = swapChainExtent;
+	scissor.extent = eclipsSwapchain.getSwapChainExtent();
 	vkCmdSetScissor(command_buffer, 0, 1, &scissor);
+
+	assert(command_buffer != VK_NULL_HANDLE);
+	assert(m_graphicsPipeline != VK_NULL_HANDLE);
+	assert(m_currentFrame < descriptorSets.size());
 
 	vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &descriptorSets[m_currentFrame], 0, nullptr);
 	vkCmdDrawIndexed(command_buffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
@@ -933,24 +822,9 @@ void EclipsRenderer::recordCommandBuffer(VkCommandBuffer command_buffer, uint32_
 	}
 }
 
-// Creates the graphics command pool used for allocating per-frame command buffers.
-// The pool is reset every frame to allow command buffer reuse.	
-void EclipsRenderer::createCommandpool() {
-	QueueFamilyIndices queue_family_indices = eclipsQueue.findQueueFamilies(eclipsDevice.getPhysicalDevice(), eclipsSurface.getSurface());
-
-	VkCommandPoolCreateInfo pool_info{};
-
-	pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	// allows any command buffer to be reset to initial state by calling VkResetCommandBuffer.
-	pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-	pool_info.queueFamilyIndex = queue_family_indices.graphicsFamily.value();
-
-	if (vkCreateCommandPool(eclipsDevice.getLogicalDevice(), &pool_info, nullptr, &commandPool) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create command pool!");
-	}
-}
-
 void EclipsRenderer::createFrameBuffers() {
+	std::vector<VkImageView> swapChainImageViews = eclipsSwapchain.getSwapchainImageViews();
+	VkExtent2D swapChainExtent = eclipsSwapchain.getSwapChainExtent();
 	swapChainFramebuffers.resize(swapChainImageViews.size());
 	for (size_t i = 0; i < swapChainImageViews.size(); i++) {
 		std::array<VkImageView, 3> attachments = {
@@ -977,7 +851,7 @@ void EclipsRenderer::createFrameBuffers() {
 void EclipsRenderer::createRenderPass() {
 	VkAttachmentDescription depthAttachment{};
 	depthAttachment.format = findDepthFormat();
-	depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+	depthAttachment.samples = msaaSamples;
 	depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -990,7 +864,7 @@ void EclipsRenderer::createRenderPass() {
 	depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
 	VkAttachmentDescription colorAttachment{};
-	colorAttachment.format = swapChainImageFormat;
+	colorAttachment.format = eclipsSwapchain.getSwapchainImageFormat();
 	colorAttachment.samples = msaaSamples;
 	colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -1003,7 +877,7 @@ void EclipsRenderer::createRenderPass() {
 	colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
 	VkAttachmentDescription colorAttachmentResolve{};
-	colorAttachmentResolve.format = swapChainImageFormat;
+	colorAttachmentResolve.format = eclipsSwapchain.getSwapchainImageFormat();
 	colorAttachmentResolve.samples = VK_SAMPLE_COUNT_1_BIT;
 	colorAttachmentResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	colorAttachmentResolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -1053,6 +927,8 @@ void EclipsRenderer::createRenderPass() {
 void EclipsRenderer::createGraphicsPipeline() {
 	auto vert_shader_code = readFile("Shaders/vert.spv");
 	auto frag_shader_code = readFile("Shaders/frag.spv");
+
+	VkExtent2D swapChainExtent = eclipsSwapchain.getSwapChainExtent();
 
 	VkShaderModule vert_shader_module = createShaderModule(vert_shader_code);
 	VkShaderModule frag_shader_module = createShaderModule(frag_shader_code);
@@ -1226,118 +1102,6 @@ VkShaderModule EclipsRenderer::createShaderModule(const std::vector<char>& code)
 	return shader_module;
 }
 
-void EclipsRenderer::createImageViews() {
-	swapChainImageViews.resize(swapChainImages.size());
-
-	for (uint32_t i = 0; i < swapChainImages.size(); i++) {
-		swapChainImageViews[i] = createImageView(swapChainImages[i], swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
-	}
-}
-
-void EclipsRenderer::createSwapChain() {
-	SwapChainSupportDetails swap_chain_support = querySwapChainSupport(eclipsDevice.getPhysicalDevice());
-
-	VkSurfaceFormatKHR surface_format = chooseSwapSurfaceFormat(swap_chain_support.formats);
-	VkPresentModeKHR present_mode = chooseSwapPresentMode(swap_chain_support.presentModes);
-	VkExtent2D extent = chooseSwapExtent(swap_chain_support.capabilities);
-
-	uint32_t image_count = swap_chain_support.capabilities.minImageCount + 1;
-	if (swap_chain_support.capabilities.maxImageCount > 0 && image_count > swap_chain_support.capabilities.maxImageCount) {
-		image_count = swap_chain_support.capabilities.maxImageCount;
-	}
-
-	VkSwapchainCreateInfoKHR create_info{};
-	create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-	create_info.surface = eclipsSurface.getSurface();
-	create_info.minImageCount = image_count;
-	create_info.imageFormat = surface_format.format;
-	create_info.imageColorSpace = surface_format.colorSpace;
-	create_info.imageExtent = extent;
-	create_info.imageArrayLayers = 1;
-	create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-	QueueFamilyIndices family_indices = eclipsQueue.findQueueFamilies(eclipsDevice.getPhysicalDevice(), eclipsSurface.getSurface());
-	uint32_t queueFamilyIndices[] = { family_indices.graphicsFamily.value(), family_indices.presentFamily.value() };
-
-	if (family_indices.graphicsFamily != family_indices.presentFamily) {
-		create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-		create_info.queueFamilyIndexCount = 2;
-		create_info.pQueueFamilyIndices = queueFamilyIndices;
-	}
-	else {
-		create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	}
-
-	create_info.preTransform = swap_chain_support.capabilities.currentTransform;
-	create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-	create_info.presentMode = present_mode;
-	create_info.clipped = VK_TRUE;
-	create_info.oldSwapchain = VK_NULL_HANDLE;
-
-	if (vkCreateSwapchainKHR(eclipsDevice.getLogicalDevice(), &create_info, nullptr, &m_swapChain) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create swap chain");
-	}
-
-	vkGetSwapchainImagesKHR(eclipsDevice.getLogicalDevice(), m_swapChain, &image_count, nullptr);
-	swapChainImages.resize(image_count);
-	vkGetSwapchainImagesKHR(eclipsDevice.getLogicalDevice(), m_swapChain, &image_count, swapChainImages.data());
-
-	swapChainImageFormat = surface_format.format;
-	swapChainExtent = extent;
-}
-
-VkSurfaceFormatKHR EclipsRenderer::chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& available_formats) {
-	for (const auto& available_format : available_formats) {
-		if (available_format.format == VK_FORMAT_B8G8R8A8_SRGB &&
-			available_format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-			return available_format;
-		}
-	}
-	return available_formats[0];
-}
-
-VkPresentModeKHR EclipsRenderer::chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& available_present_modes) {
-	for (const auto& mode : available_present_modes) {
-		if (mode == VK_PRESENT_MODE_MAILBOX_KHR) return mode;
-	}
-	return VK_PRESENT_MODE_FIFO_KHR;
-}
-
-VkExtent2D EclipsRenderer::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) {
-	if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
-		return capabilities.currentExtent;
-	}
-	else {
-		int width, height;
-		glfwGetFramebufferSize(window, &width, &height);
-		VkExtent2D actual_extent = { static_cast<uint32_t>(width), static_cast<uint32_t>(height) };
-		actual_extent.width = std::clamp(actual_extent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
-		actual_extent.height = std::clamp(actual_extent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
-		return actual_extent;
-	}
-}
-
-SwapChainSupportDetails EclipsRenderer::querySwapChainSupport(VkPhysicalDevice device) {
-	SwapChainSupportDetails details;
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, eclipsSurface.getSurface(), &details.capabilities);
-
-	uint32_t format_count;
-	vkGetPhysicalDeviceSurfaceFormatsKHR(device, eclipsSurface.getSurface(), &format_count, nullptr);
-	if (format_count != 0) {
-		details.formats.resize(format_count);
-		vkGetPhysicalDeviceSurfaceFormatsKHR(device, eclipsSurface.getSurface(), &format_count, details.formats.data());
-	}
-
-	uint32_t present_mode_count;
-	vkGetPhysicalDeviceSurfacePresentModesKHR(device, eclipsSurface.getSurface(), &present_mode_count, nullptr);
-	if (present_mode_count != 0) {
-		details.presentModes.resize(present_mode_count);
-		vkGetPhysicalDeviceSurfacePresentModesKHR(device, eclipsSurface.getSurface(), &present_mode_count, details.presentModes.data());
-	}
-
-	return details;
-}
-
 std::vector<char> EclipsRenderer::readFile(const std::string& filename) {
 	std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
@@ -1360,7 +1124,7 @@ void EclipsRenderer::drawFrame() {
 
 	uint32_t image_index;
 
-	VkResult result = vkAcquireNextImageKHR(eclipsDevice.getLogicalDevice(), m_swapChain, UINT64_MAX, m_imageAvailableSemaphores[m_currentFrame], VK_NULL_HANDLE, &image_index);
+	VkResult result = vkAcquireNextImageKHR(eclipsDevice.getLogicalDevice(), eclipsSwapchain.getSwapchain(), UINT64_MAX, m_imageAvailableSemaphores[m_currentFrame], VK_NULL_HANDLE, &image_index);
 
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_framebufferResized) {
 		m_framebufferResized = false;
@@ -1401,7 +1165,7 @@ void EclipsRenderer::drawFrame() {
 	present_info.waitSemaphoreCount = 1;
 	present_info.pWaitSemaphores = signal_semaphores;
 
-	VkSwapchainKHR swap_chains[] = { m_swapChain };
+	VkSwapchainKHR swap_chains[] = { eclipsSwapchain.getSwapchain() };
 	present_info.swapchainCount = 1;
 	present_info.pSwapchains = swap_chains;
 	present_info.pImageIndices = &image_index;
@@ -1424,6 +1188,8 @@ void EclipsRenderer::drawFrame() {
 
 void EclipsRenderer::updateUniformBuffer(uint32_t current_image)
 {
+	VkExtent2D swapChainExtent = eclipsSwapchain.getSwapChainExtent();
+
 	static auto start_time = std::chrono::high_resolution_clock::now();
 
 	auto current_time = std::chrono::high_resolution_clock::now();
@@ -1493,11 +1259,11 @@ void EclipsRenderer::destroyRenderer() {
 		vkDestroyFence(eclipsDevice.getLogicalDevice(), m_inFlightFences[i], nullptr);
 	}
 
-	vkDestroyCommandPool(eclipsDevice.getLogicalDevice(), commandPool, nullptr);
+	vkDestroyCommandPool(eclipsDevice.getLogicalDevice(), eclipsCommandPool.getCommandPool(), nullptr);
 
 	vkDestroyDevice(eclipsDevice.getLogicalDevice(), nullptr);
 
-	eclipsDebug.destroyEclipsDebug(eclipsInstance->getInstance());
+	eclipsDebug.destroyDebug(eclipsInstance->getInstance());
 	eclipsSurface.destroySurface(eclipsInstance->getInstance());
 	eclipsInstance->destroyInstance();
 }

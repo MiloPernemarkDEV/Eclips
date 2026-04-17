@@ -1,27 +1,27 @@
 #include "pch.h"
 #include "EclipsQueue.h"
 
-QueueFamilyIndices EclipsQueue::findQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface) {
-	QueueFamilyIndices family_indices;
-	uint32_t queue_family_count = 0;
+QueueFamilyIndices EclipsQueue::findQueueFamilies(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface) {
+	QueueFamilyIndices familyIndices;
+	uint32_t queueFamilyCount = 0;
 
 	//@todo
 	// Debug Exception thrown somewhere around here 
-	vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, nullptr);
+	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
 
-	std::vector<VkQueueFamilyProperties> queue_families(queue_family_count);
-	vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, queue_families.data());
+	std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies.data());
 
 	int i = 0;
-	for (const auto& queue_family : queue_families) {
-		if (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT) family_indices.graphicsFamily = i;
+	for (const auto& queueFamily : queueFamilies) {
+		if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) familyIndices.graphicsFamily = i;
 
-		VkBool32 present_support = false;
-		vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &present_support);
-		if (present_support) family_indices.presentFamily = i;
+		VkBool32 presentSupport = false;
+		vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, surface, &presentSupport);
+		if (presentSupport) familyIndices.presentFamily = i;
 
-		if (family_indices.isComplete()) break;
+		if (familyIndices.isComplete()) break;
 		i++;
 	}
-	return family_indices;
+	return familyIndices;
 }

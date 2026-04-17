@@ -20,7 +20,7 @@ public:
 	std::vector<const char*> getRequiredExtensions();
 	void setupDebugMessenger(VkInstance instance);
 	void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& create_info);
-	void destroyEclipsDebug(VkInstance instance);
+	void destroyDebug(VkInstance instance);
 
 	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 		VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
