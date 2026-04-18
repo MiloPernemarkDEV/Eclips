@@ -777,7 +777,7 @@ void EclipsRenderer::recordCommandBuffer(VkCommandBuffer command_buffer, uint32_
 	renderPassInfo.renderArea.extent = eclipsSwapchain.getSwapChainExtent();;
 
 	std::array<VkClearValue, 2> clearValues{};
-	clearValues[0].color = { {0.07f, 0.13f, 0.17f, 1.0f} };
+	clearValues[0].color = { 0.0f, 0.0f, 0.0f, 1.0f };
 	clearValues[1].depthStencil = { 1.0f, 0 };
 
 	renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
@@ -1119,7 +1119,7 @@ std::vector<char> EclipsRenderer::readFile(const std::string& filename) {
 	return buffer;
 }
 
-void EclipsRenderer::drawFrame() {
+void EclipsRenderer::drawFrame(const Camera& camera) {
 	vkWaitForFences(eclipsDevice.getLogicalDevice(), 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
 
 	uint32_t image_index;
@@ -1139,7 +1139,7 @@ void EclipsRenderer::drawFrame() {
 
 	vkResetCommandBuffer(commandBuffers[m_currentFrame], 0);
 
-	updateUniformBuffer(m_currentFrame);
+	updateUniformBuffer(m_currentFrame, camera);
 
 	recordCommandBuffer(commandBuffers[m_currentFrame], image_index);
 
@@ -1186,7 +1186,7 @@ void EclipsRenderer::drawFrame() {
 	m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
-void EclipsRenderer::updateUniformBuffer(uint32_t current_image)
+void EclipsRenderer::updateUniformBuffer(uint32_t current_image, const Camera& camera)
 {
 	VkExtent2D swapChainExtent = eclipsSwapchain.getSwapChainExtent();
 
@@ -1195,23 +1195,18 @@ void EclipsRenderer::updateUniformBuffer(uint32_t current_image)
 	auto current_time = std::chrono::high_resolution_clock::now();
 	float time = std::chrono::duration<float, std::chrono::seconds::period>(current_time - start_time).count();
 
-
 	UniformBufferObject ubo;
 
 	ubo.model = glm::rotate(glm::mat4(1.0f), time *
 		glm::radians(20.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 
-	ubo.view = glm::lookAt(
-		glm::vec3(2.0f, 2.0f, 2.0f),
-		glm::vec3(0.0f, 0.0f, 0.0f),
-		glm::vec3(0.0f, 0.0f, 1.0f));
+	ubo.view = camera.getViewMatrix();
 
 	ubo.proj = glm::perspective(
-		glm::radians(
-			45.0f),
+		glm::radians(45.0f),
 		swapChainExtent.width / (float)swapChainExtent.height,
-		1.0f,
-		10.0f);
+		0.1f,
+		1000.0f);
 	ubo.proj[1][1] *= -1;
 
 	memcpy(uniformBuffersMapped[current_image], &ubo, sizeof(ubo));

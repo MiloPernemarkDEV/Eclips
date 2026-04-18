@@ -39,11 +39,13 @@
 #include "EclipsSwapchain.h"
 #include "EclipsImage.h"
 #include "EclipsMemory.h"
+#include "Camera.h"
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
-const std::string MODEL_PATH_VIKING_ROOM = "assets/viking_room.obj";
-const std::string TEXTURE_PATH = "textures/viking_room.png";
+const std::string MODEL_PATH_VIKING_ROOM = "assets/spacecraft.obj";
+const std::string MODEL_PATH_SPACE_SHIP = "assets/spacecraft.obj";
+const std::string TEXTURE_PATH = "textures/spacecraft.png";
 
 struct UniformBufferObject
 {
@@ -51,7 +53,7 @@ struct UniformBufferObject
 	alignas(16)glm::mat4 view;
 	alignas(16)glm::mat4 proj;
 };
-
+			
 struct Vertex
 {
 	glm::vec3 pos;
@@ -111,7 +113,7 @@ public:
 	EclipsRenderer(EclipsInstance& eclipsInstance, EclipsWindow& eclipsWindow);
 
 	bool init();
-	void drawFrame();
+	void drawFrame(const Camera& camera);
 	void destroyRenderer();
 
 private:
@@ -228,7 +230,7 @@ private:
 
 	static std::vector<char> readFile(const std::string& filename);
 
-	void updateUniformBuffer(uint32_t current_image);
+	void updateUniformBuffer(uint32_t current_image, const Camera& camera);
 };
 
 #endif // ECLIPS_RENDERER_H

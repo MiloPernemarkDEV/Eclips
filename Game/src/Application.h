@@ -4,6 +4,7 @@
 #include <EclipsInstance.h>
 #include <EclipsWindow.h>
 #include <EclipsRenderer.h>
+#include "Camera.h"
 
 class Application {
 public:
@@ -16,6 +17,7 @@ private:
 	EclipsInstance eclipsInstance;
 	EclipsWindow eclipsWindow;
 	EclipsRenderer eclipsRenderer;
+	Camera camera;
 };
 
 #endif // ECLIPS_APPLICATION_H

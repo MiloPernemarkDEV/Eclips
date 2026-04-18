@@ -24,9 +24,17 @@ bool Application::init()
 
 void Application::run()
 {
+	static auto lastTime = std::chrono::high_resolution_clock::now();
+
 	while (!glfwWindowShouldClose(eclipsWindow.getWindow())) {
+		auto currentTime = std::chrono::high_resolution_clock::now();
+		float deltaTime = std::chrono::duration<float>(currentTime - lastTime).count();
+		lastTime = currentTime;
+
 		glfwPollEvents();
-		eclipsRenderer.drawFrame();
+		camera.update(eclipsWindow.getWindow(), deltaTime);
+
+		eclipsRenderer.drawFrame(camera);
 	}
 }
 
