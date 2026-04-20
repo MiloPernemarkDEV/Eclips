@@ -4,7 +4,7 @@
 #include <EclipsInstance.h>
 #include <EclipsWindow.h>
 #include <EclipsRenderer.h>
-#include "Camera.h"
+#include "Camera.h"	
 
 class Application {
 public:
