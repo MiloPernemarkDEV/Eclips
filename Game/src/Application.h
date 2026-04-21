@@ -1,9 +1,8 @@
-#ifndef ECLIPS_APPLICATION_H
-#define ECLIPS_APPLICATION_H
+#pragma once
 
-#include <EclipsInstance.h>
-#include <EclipsWindow.h>
-#include <EclipsRenderer.h>
+#include <Instance.h>
+#include <Platform.h>
+#include <Renderer.h>
 #include "Camera.h"	
 
 class Application {
@@ -14,10 +13,8 @@ public:
 	void run();
 	void end();
 private:
-	EclipsInstance eclipsInstance;
-	EclipsWindow eclipsWindow;
-	EclipsRenderer eclipsRenderer;
+	Instance instance;
+	Platform platform;
+	Renderer renderer;
 	Camera camera;
 };
-
-#endif // ECLIPS_APPLICATION_H

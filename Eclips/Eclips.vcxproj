@@ -23,37 +23,51 @@
     <None Include="shaders\shader.vert" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\Camera.cpp" />
-    <ClCompile Include="src\EclipsCommandPool.cpp" />
-    <ClCompile Include="src\EclipsDebug.cpp" />
-    <ClCompile Include="src\EclipsDevice.cpp" />
-    <ClCompile Include="src\EclipsImage.cpp" />
-    <ClCompile Include="src\EclipsInstance.cpp" />
-    <ClCompile Include="src\EclipsMemory.cpp" />
-    <ClCompile Include="src\EclipsQueue.cpp" />
-    <ClCompile Include="src\EclipsRenderer.cpp" />
-    <ClCompile Include="src\EclipsSurface.cpp" />
-    <ClCompile Include="src\EclipsSwapchain.cpp" />
-    <ClCompile Include="src\EclipsWindow.cpp" />
-    <ClCompile Include="src\pch.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
-    </ClCompile>
+    <ClCompile Include="private\Camera.cpp" />
+    <ClCompile Include="private\CmdBuffer.cpp" />
+    <ClCompile Include="private\CommandPool.cpp" />
+    <ClCompile Include="private\Debug.cpp" />
+    <ClCompile Include="private\DescriptorSetLayout.cpp" />
+    <ClCompile Include="private\Device.cpp" />
+    <ClCompile Include="private\FrameResource.cpp" />
+    <ClCompile Include="private\Image.cpp" />
+    <ClCompile Include="private\Instance.cpp" />
+    <ClCompile Include="private\Memory.cpp" />
+    <ClCompile Include="private\pch.cpp" />
+    <ClCompile Include="private\Pipeline.cpp" />
+    <ClCompile Include="private\Platform.cpp" />
+    <ClCompile Include="private\Queue.cpp" />
+    <ClCompile Include="private\Renderer.cpp" />
+    <ClCompile Include="private\RenderPass.cpp" />
+    <ClCompile Include="private\rendUtil.cpp" />
+    <ClCompile Include="private\Surface.cpp" />
+    <ClCompile Include="private\Swapchain.cpp" />
+    <ClCompile Include="private\UBO.cpp" />
+    <ClCompile Include="private\Vertex.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\Camera.h" />
-    <ClInclude Include="src\EclipsCommandPool.h" />
-    <ClInclude Include="src\EclipsDebug.h" />
-    <ClInclude Include="src\EclipsDevice.h" />
-    <ClInclude Include="src\EclipsImage.h" />
-    <ClInclude Include="src\EclipsInstance.h" />
-    <ClInclude Include="src\EclipsMemory.h" />
-    <ClInclude Include="src\EclipsQueue.h" />
-    <ClInclude Include="src\EclipsRenderer.h" />
-    <ClInclude Include="src\EclipsSurface.h" />
-    <ClInclude Include="src\EclipsSwapchain.h" />
-    <ClInclude Include="src\EclipsWindow.h" />
-    <ClInclude Include="src\pch.h" />
+    <ClInclude Include="public\Camera.h" />
+    <ClInclude Include="public\CmdBuffer.h" />
+    <ClInclude Include="public\CommandPool.h" />
+    <ClInclude Include="public\Debug.h" />
+    <ClInclude Include="public\DescriptorSetLayout.h" />
+    <ClInclude Include="public\Device.h" />
+    <ClInclude Include="public\FrameResource.h" />
+    <ClInclude Include="public\Image.h" />
+    <ClInclude Include="public\Instance.h" />
+    <ClInclude Include="public\Memory.h" />
+    <ClInclude Include="public\pch.h" />
+    <ClInclude Include="public\Pipeline.h" />
+    <ClInclude Include="public\PipelineConfigs.h" />
+    <ClInclude Include="public\Platform.h" />
+    <ClInclude Include="public\Queue.h" />
+    <ClInclude Include="public\Renderer.h" />
+    <ClInclude Include="public\RenderPass.h" />
+    <ClInclude Include="public\rendUtil.h" />
+    <ClInclude Include="public\Surface.h" />
+    <ClInclude Include="public\Swapchain.h" />
+    <ClInclude Include="public\UBO.h" />
+    <ClInclude Include="public\Vertex.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>18.0</VCProjectVersion>
@@ -123,6 +137,7 @@
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalIncludeDirectories>;$(SolutionDir)\Eclips\public;$(SolutionDir)\Vendor\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -138,6 +153,7 @@
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalIncludeDirectories>;$(SolutionDir)\Eclips\public;$(SolutionDir)\Vendor\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -151,7 +167,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)\Vendor\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)\Vendor\include;$(SolutionDir)\Eclips\public;$(SolutionDir)\Vendor\include</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
     </ClCompile>
@@ -171,7 +187,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>C:\Users\milos\source\repos\Eclips\Vendor\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\milos\source\repos\Eclips\Vendor\include;%(AdditionalIncludeDirectories);$(SolutionDir)\Eclips\public;$(SolutionDir)\Vendor\include</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
     </ClCompile>

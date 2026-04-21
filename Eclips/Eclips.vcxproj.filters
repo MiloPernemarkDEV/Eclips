@@ -1,13 +1,16 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="Source Files">
+    <Filter Include="Public">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Private">
       <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
       <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
     </Filter>
-    <Filter Include="Header Files">
-      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    <Filter Include="Renderer">
+      <UniqueIdentifier>{4377ac3b-92e5-4afa-abc1-58b251b528a9}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -15,85 +18,136 @@
     <None Include="shaders\shader.vert" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\EclipsDebug.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="private\Camera.cpp">
+      <Filter>Private</Filter>
     </ClCompile>
-    <ClCompile Include="src\EclipsDevice.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="private\CommandPool.cpp">
+      <Filter>Private</Filter>
     </ClCompile>
-    <ClCompile Include="src\EclipsInstance.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="private\Debug.cpp">
+      <Filter>Private</Filter>
     </ClCompile>
-    <ClCompile Include="src\EclipsQueue.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="private\Device.cpp">
+      <Filter>Private</Filter>
     </ClCompile>
-    <ClCompile Include="src\EclipsRenderer.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="private\Image.cpp">
+      <Filter>Private</Filter>
     </ClCompile>
-    <ClCompile Include="src\EclipsSurface.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="private\Instance.cpp">
+      <Filter>Private</Filter>
     </ClCompile>
-    <ClCompile Include="src\EclipsWindow.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="private\Memory.cpp">
+      <Filter>Private</Filter>
     </ClCompile>
-    <ClCompile Include="src\pch.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="private\pch.cpp">
+      <Filter>Private</Filter>
     </ClCompile>
-    <ClCompile Include="src\EclipsSwapchain.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="private\Platform.cpp">
+      <Filter>Private</Filter>
     </ClCompile>
-    <ClCompile Include="src\EclipsCommandPool.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="private\Queue.cpp">
+      <Filter>Private</Filter>
     </ClCompile>
-    <ClCompile Include="src\EclipsImage.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="private\Renderer.cpp">
+      <Filter>Private</Filter>
     </ClCompile>
-    <ClCompile Include="src\EclipsMemory.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="private\Surface.cpp">
+      <Filter>Private</Filter>
     </ClCompile>
-    <ClCompile Include="src\Camera.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="private\Swapchain.cpp">
+      <Filter>Private</Filter>
+    </ClCompile>
+    <ClCompile Include="private\UBO.cpp">
+      <Filter>Private</Filter>
+    </ClCompile>
+    <ClCompile Include="private\Pipeline.cpp">
+      <Filter>Private</Filter>
+    </ClCompile>
+    <ClCompile Include="private\RenderPass.cpp">
+      <Filter>Private</Filter>
+    </ClCompile>
+    <ClCompile Include="private\FrameResource.cpp">
+      <Filter>Private</Filter>
+    </ClCompile>
+    <ClCompile Include="private\CmdBuffer.cpp">
+      <Filter>Private</Filter>
+    </ClCompile>
+    <ClCompile Include="private\rendUtil.cpp">
+      <Filter>Private</Filter>
+    </ClCompile>
+    <ClCompile Include="private\DescriptorSetLayout.cpp">
+      <Filter>Private</Filter>
+    </ClCompile>
+    <ClCompile Include="private\Vertex.cpp">
+      <Filter>Private</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\EclipsDebug.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="public\Camera.h">
+      <Filter>Public</Filter>
     </ClInclude>
-    <ClInclude Include="src\EclipsDevice.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="public\CommandPool.h">
+      <Filter>Public</Filter>
     </ClInclude>
-    <ClInclude Include="src\EclipsInstance.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="public\Debug.h">
+      <Filter>Public</Filter>
     </ClInclude>
-    <ClInclude Include="src\EclipsQueue.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="public\Device.h">
+      <Filter>Public</Filter>
     </ClInclude>
-    <ClInclude Include="src\EclipsRenderer.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="public\Image.h">
+      <Filter>Public</Filter>
     </ClInclude>
-    <ClInclude Include="src\EclipsSurface.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="public\Instance.h">
+      <Filter>Public</Filter>
     </ClInclude>
-    <ClInclude Include="src\EclipsWindow.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="public\Memory.h">
+      <Filter>Public</Filter>
     </ClInclude>
-    <ClInclude Include="src\pch.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="public\pch.h">
+      <Filter>Public</Filter>
     </ClInclude>
-    <ClInclude Include="src\EclipsSwapchain.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="public\Platform.h">
+      <Filter>Public</Filter>
     </ClInclude>
-    <ClInclude Include="src\EclipsCommandPool.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="public\Queue.h">
+      <Filter>Public</Filter>
     </ClInclude>
-    <ClInclude Include="src\EclipsImage.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="public\Renderer.h">
+      <Filter>Public</Filter>
     </ClInclude>
-    <ClInclude Include="src\EclipsMemory.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="public\Surface.h">
+      <Filter>Public</Filter>
     </ClInclude>
-    <ClInclude Include="src\Camera.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="public\Swapchain.h">
+      <Filter>Public</Filter>
+    </ClInclude>
+    <ClInclude Include="public\UBO.h">
+      <Filter>Public</Filter>
+    </ClInclude>
+    <ClInclude Include="public\Pipeline.h">
+      <Filter>Public</Filter>
+    </ClInclude>
+    <ClInclude Include="public\RenderPass.h">
+      <Filter>Public</Filter>
+    </ClInclude>
+    <ClInclude Include="public\FrameResource.h">
+      <Filter>Public</Filter>
+    </ClInclude>
+    <ClInclude Include="public\CmdBuffer.h">
+      <Filter>Public</Filter>
+    </ClInclude>
+    <ClInclude Include="public\rendUtil.h">
+      <Filter>Public</Filter>
+    </ClInclude>
+    <ClInclude Include="public\PipelineConfigs.h">
+      <Filter>Public</Filter>
+    </ClInclude>
+    <ClInclude Include="public\DescriptorSetLayout.h">
+      <Filter>Public</Filter>
+    </ClInclude>
+    <ClInclude Include="public\Vertex.h">
+      <Filter>Public</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

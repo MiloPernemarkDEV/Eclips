@@ -1,7 +1,7 @@
 #include "Application.h"
 
 Application::Application()
-	: eclipsRenderer(eclipsInstance, eclipsWindow)
+	: renderer(instance, platform)
 {
 }
 
@@ -11,11 +11,11 @@ Application::~Application()
 
 bool Application::init()
 {
-	if (!eclipsWindow.init()) {
+	if (!platform.init()) {
 		return false;
 	}
 
-	if (!eclipsRenderer.init()) {
+	if (!renderer.init()) {
 		return false;
 	}
 
@@ -26,21 +26,21 @@ void Application::run()
 {
 	static auto lastTime = std::chrono::high_resolution_clock::now();
 
-	while (!glfwWindowShouldClose(eclipsWindow.getWindow())) {
+	while (!glfwWindowShouldClose(platform.getWindow())) {
 		auto currentTime = std::chrono::high_resolution_clock::now();
 		float deltaTime = std::chrono::duration<float>(currentTime - lastTime).count();
 		lastTime = currentTime;
 
 		glfwPollEvents();
-		camera.update(eclipsWindow.getWindow(), deltaTime);
+		camera.update(platform.getWindow(), deltaTime);
 
-		eclipsRenderer.drawFrame(camera);
+		renderer.drawFrame(camera);
 	}
 }
 
 void Application::end()
 {
-	eclipsRenderer.destroyRenderer();
-	eclipsWindow.destroyWindow();
+	renderer.destroyRenderer();
+	platform.destroyWindow();
 	glfwTerminate();
 }
