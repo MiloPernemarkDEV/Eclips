@@ -1,17 +1,17 @@
 #include "pch.h"
 #include "CmdBuffer.h"
+#include "Pipeline.h"
+#include "VBO.h"
 
 // record as few command buffers as possible but as many as necessary per frame.
 // The buffer can contain commands that differ, some can push constants, be action type or descriptor set etc.
-
-
 
 /* 
  * Records commands into a primary command buffer.
  * commands must be recorded into a buffer before submission.
  * This function begins the render pass, binds resources, and issues the draw.
 */ 
-void CmdBuffer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image_index) {
+void CmdBuffer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image_index, Pipeline& pipeline, VBO& vertexBufferObject) {
 	VkCommandBufferBeginInfo beginInfo{};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	beginInfo.flags = 0;
@@ -38,9 +38,9 @@ void CmdBuffer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imag
 
 	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.get());
 
-	VkBuffer vertex_buffers[] = { m_vertexBuffer };
+	VkBuffer vertex_buffers[] = { vertexBufferObject.get()};
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertex_buffers, offsets);
 
@@ -63,7 +63,7 @@ void CmdBuffer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imag
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
 	assert(commandBuffer != VK_NULL_HANDLE);
-	assert(m_graphicsPipeline != VK_NULL_HANDLE);
+	assert(pipeline.get() != VK_NULL_HANDLE);
 	assert(m_currentFrame < descriptorSets.size());
 
 	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &descriptorSets[m_currentFrame], 0, nullptr);

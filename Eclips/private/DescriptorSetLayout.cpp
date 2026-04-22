@@ -15,8 +15,6 @@ DescriptorSetLayout::~DescriptorSetLayout()
 
 void DescriptorSetLayout::create()
 {
-    // Example: UBO + sampler (adjust to your needs)
-
     VkDescriptorSetLayoutBinding uboLayoutBinding{};
     uboLayoutBinding.binding = 0;
     uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;

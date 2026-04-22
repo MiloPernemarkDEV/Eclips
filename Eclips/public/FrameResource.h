@@ -4,14 +4,14 @@
 #include "Swapchain.h"
 #include "Image.h"
 #include "Device.h"
-#include "Memory.h"
+#include "rendUtil.h"
 #include "RenderPass.h"
 
 class FrameResource {
 public:
 	void createResources();
 	FrameResource();
-	FrameResource(Device& device, Image& image, Swapchain& swapchain, Memory& memory, RenderPass& renderPass);
+	FrameResource(Device& device, Image& image, Swapchain& swapchain, RenderPass& renderPass);
 	VkSampleCountFlagBits getMaxUsableSampleCount();
 	VkFormat findDepthFormat();
 	VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, 
@@ -27,7 +27,6 @@ private:
 	Device* device;
 	Image* image;
 	Swapchain* swapchain;
-	Memory* memory;
 	RenderPass* renderPass;
 
 	VkImageView colorImageView = VK_NULL_HANDLE;

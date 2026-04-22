@@ -1,18 +1,20 @@
 #include "pch.h"
 #include "Renderer.h"	
-#define STB_IMAGE_IMPLEMENTATION
+
 #include <stb/stb_image.h>
-#define TINYOBJLOADER_DISABLE_FAST_FLOAT
-#define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
 #include "PipelineConfigs.h"
 
 Renderer::Renderer(Instance& instance, Platform& platform)
-	: debug(true), surface(platform), instance(&instance), device(surface), 
-	frameResource(device, image, swapchain, memory, renderPass), 
+	: debug(true), 
+	surface(platform), 
+	instance(&instance), 
+	device(surface), 
+	frameResource(device, image, swapchain, renderPass), 
 	swapchain(device, frameResource, queue, surface, image), pipeline(device), 
 	descriptorSetLayout(device)
 {
+
 }
 
 bool Renderer::init() {
@@ -38,7 +40,6 @@ void Renderer::initVulkan() {
 
 	descriptorSetLayout.create();
 
-	// Need to refactor frameResources to establish a final sample count not just the highest possible
 	pipeline.create(PipeConfigs::ForwardOpaque(
 		renderPass.getRenderPass(), 
 		descriptorSetLayout.get(), 
@@ -51,7 +52,8 @@ void Renderer::initVulkan() {
 	createTextureImage();
 	createTextureImageView();
 	createTextureSampler();
-	createVertexBuffer();
+
+	vertexBuffer.create(queue, device, commandPool, vertices);
 	createIndexBuffer();
 	createUniformBuffers();
 	createDescriptorPool();
@@ -484,41 +486,6 @@ void Renderer::createUniformBuffers()
 	}
 }
 
-
-// Think of it as the shape of the descriptor set,When creating pipelines or allocating the descriptor sets
-// you have to use the descriptor set layout.
-void Renderer::createDescriptorSetLayout()
-{
-	VkDescriptorSetLayoutBinding uboLayoutBinding{};
-	uboLayoutBinding.binding = 0;
-	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	uboLayoutBinding.descriptorCount = 1;
-	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	uboLayoutBinding.pImmutableSamplers = nullptr;
-
-	VkDescriptorSetLayoutBinding samplerLayoutBinding{};
-	samplerLayoutBinding.binding = 1;
-	samplerLayoutBinding.descriptorCount = 1;
-	samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	samplerLayoutBinding.pImmutableSamplers = nullptr;
-
-	// We only need to set the stage flags to indicate that we will use the descriptor in the fragment shader for now 
-	// Later if we do something more complex we might need to set it to both vertex and fragment shader stages
-	samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-	std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
-
-	VkDescriptorSetLayoutCreateInfo layoutInfo{};
-	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-	layoutInfo.pBindings = bindings.data();
-
-	if (vkCreateDescriptorSetLayout(device.getLogicalDevice(), &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to create descriptor set layout!");
-	}
-}
-
 void Renderer::createIndexBuffer() {
 	VkDeviceSize buffer_size = sizeof(indices[0]) * indices.size();
 
@@ -539,73 +506,6 @@ void Renderer::createIndexBuffer() {
 	vkFreeMemory(device.getLogicalDevice(), staging_buffer_memory, nullptr);
 }
 
-void Renderer::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
-	VkBuffer& buffer, VkDeviceMemory& bufferMemory)
-{
-	VkBufferCreateInfo bufferInfo = {};
-	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	bufferInfo.size = size;
-	bufferInfo.usage = usage;
-	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-	if (vkCreateBuffer(device.getLogicalDevice(), &bufferInfo, nullptr, &buffer) != VK_SUCCESS)
-	{
-		throw std::runtime_error("createBuffer(); failed to create buffer!");
-	}
-
-	VkMemoryRequirements memRequirements;
-	vkGetBufferMemoryRequirements(device.getLogicalDevice(), buffer, &memRequirements);
-
-	VkMemoryAllocateInfo allocInfo = {};
-	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	allocInfo.allocationSize = memRequirements.size;
-	allocInfo.memoryTypeIndex = memory.findMemoryType(memRequirements.memoryTypeBits, properties, device);
-
-	if (vkAllocateMemory(device.getLogicalDevice(), &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS)
-	{
-		throw std::runtime_error("failed to allocate buffer memory!");
-	}
-
-	vkBindBufferMemory(device.getLogicalDevice(), buffer, bufferMemory, 0);
-}
-
-void Renderer::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
-	VkCommandBuffer commandBuffer = commandPool.beginSingleTimeCommands(device);
-
-	VkBufferCopy copyRegion{};
-	copyRegion.size = size;
-	vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
-
-	commandPool.endSingleTimeCommands(commandBuffer, device, queue);
-}
-
-void Renderer::createVertexBuffer() {
-	VkDeviceSize buffer_size = sizeof(vertices[0]) * vertices.size();
-
-	VkBuffer staging_buffer;
-	VkDeviceMemory staging_buffer_memory;
-	createBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-		| VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, staging_buffer, staging_buffer_memory);
-
-	void* data;
-	vkMapMemory(device.getLogicalDevice(), staging_buffer_memory, 0, buffer_size, 0, &data);
-	memcpy(data, vertices.data(), (size_t)buffer_size);
-	vkUnmapMemory(device.getLogicalDevice(), staging_buffer_memory);
-
-	createBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_vertexBuffer, m_vertexBufferMemory);
-
-	copyBuffer(staging_buffer, m_vertexBuffer, buffer_size);
-	vkDestroyBuffer(device.getLogicalDevice(), staging_buffer, nullptr);
-	vkFreeMemory(device.getLogicalDevice(), staging_buffer_memory, nullptr);
-}
-
-
-
-/**
-* The semaphore waiting process happens on the GPU while
-* the fence waiting process happens on the CPU for CPU->GPU sync
-*/
 void Renderer::createSyncObjects() {
 	m_imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
 

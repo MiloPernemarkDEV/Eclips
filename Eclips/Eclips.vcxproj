@@ -32,7 +32,6 @@
     <ClCompile Include="private\FrameResource.cpp" />
     <ClCompile Include="private\Image.cpp" />
     <ClCompile Include="private\Instance.cpp" />
-    <ClCompile Include="private\Memory.cpp" />
     <ClCompile Include="private\pch.cpp" />
     <ClCompile Include="private\Pipeline.cpp" />
     <ClCompile Include="private\Platform.cpp" />
@@ -43,6 +42,7 @@
     <ClCompile Include="private\Surface.cpp" />
     <ClCompile Include="private\Swapchain.cpp" />
     <ClCompile Include="private\UBO.cpp" />
+    <ClCompile Include="private\VBO.cpp" />
     <ClCompile Include="private\Vertex.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -55,7 +55,6 @@
     <ClInclude Include="public\FrameResource.h" />
     <ClInclude Include="public\Image.h" />
     <ClInclude Include="public\Instance.h" />
-    <ClInclude Include="public\Memory.h" />
     <ClInclude Include="public\pch.h" />
     <ClInclude Include="public\Pipeline.h" />
     <ClInclude Include="public\PipelineConfigs.h" />
@@ -67,6 +66,7 @@
     <ClInclude Include="public\Surface.h" />
     <ClInclude Include="public\Swapchain.h" />
     <ClInclude Include="public\UBO.h" />
+    <ClInclude Include="public\VBO.h" />
     <ClInclude Include="public\Vertex.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

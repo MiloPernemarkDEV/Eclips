@@ -7,9 +7,6 @@
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
 
-#define GLM_FORCE_RADIANS
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/hash.hpp>
@@ -37,7 +34,6 @@
 #include "CommandPool.h"
 #include "Swapchain.h"
 #include "Image.h"
-#include "Memory.h"
 #include "Camera.h"
 #include "Platform.h"
 #include "RenderPass.h"
@@ -45,6 +41,7 @@
 #include "DescriptorSetLayout.h"
 #include "Pipeline.h"
 #include "Vertex.h"
+#include "VBO.h"
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -78,11 +75,11 @@ private:
 	CommandPool commandPool;
 	Swapchain swapchain;
 	Image image;
-	Memory memory;
 	RenderPass renderPass;
 	FrameResource frameResource;
 	Pipeline pipeline;
 	DescriptorSetLayout descriptorSetLayout;
+	VBO vertexBuffer;
 
 	//  Synchronization
 	std::vector<VkCommandBuffer> commandBuffers;
@@ -92,8 +89,6 @@ private:
 
 	// Buffers and Images 
 	uint32_t m_currentFrame = 0;
-	VkBuffer m_vertexBuffer = VK_NULL_HANDLE;
-	VkDeviceMemory m_vertexBufferMemory = VK_NULL_HANDLE;
 	VkBuffer indexBuffer = VK_NULL_HANDLE;
 	VkDeviceMemory indexBufferMemory = VK_NULL_HANDLE;
 	std::vector<VkBuffer> uniformBuffers;
@@ -109,7 +104,6 @@ private:
 	VkImageView textureImageView = VK_NULL_HANDLE;
 	VkSampler textureSampler = VK_NULL_HANDLE;
 		
-
 	// Move to a mesh struct 
 	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;
@@ -120,6 +114,7 @@ private:
 
 	// MSAA
 	void generateMipmaps(VkImage image, int32_t texWidth, VkFormat imageFormat, int32_t texHeight, uint32_t mipLevels);
+
 	void loadModel(const std::string& MODEL_PATHS);
 
 	bool hasStencilComponent(VkFormat format);
@@ -133,17 +128,7 @@ private:
 	void createDescriptorPool();
 
 	void createUniformBuffers();
-
-	void createDescriptorSetLayout();
-
 	void createIndexBuffer();
-
-	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
-		VkBuffer& buffer, VkDeviceMemory& bufferMemory);
-
-	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
-
-	void createVertexBuffer();
 
 	void createSyncObjects();
 	void createCommandBuffer();

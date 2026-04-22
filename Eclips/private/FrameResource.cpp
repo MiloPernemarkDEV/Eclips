@@ -12,8 +12,8 @@ FrameResource::FrameResource()
 {
 }
 
-FrameResource::FrameResource(Device& device, Image& image, Swapchain& swapchain, Memory& memory, RenderPass& renderPass)
-	: device(&device), image(&image), swapchain(&swapchain), memory(&memory), renderPass(&renderPass)
+FrameResource::FrameResource(Device& device, Image& image, Swapchain& swapchain, RenderPass& renderPass)
+	: device(&device), image(&image), swapchain(&swapchain), renderPass(&renderPass)
 {
 }
 
@@ -24,7 +24,7 @@ void FrameResource::createColorResources()
 	VkExtent2D swapChainExtent = swapchain->getSwapChainExtent();
 	image->createImage(swapChainExtent.width, swapChainExtent.height, 1, msaaSamples, colorFormat, VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		colorImage, colorImageMemory, *device, *memory);
+		colorImage, colorImageMemory, *device);
 
 	colorImageView = image->createImageView(colorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1, *device);
 }
@@ -36,7 +36,7 @@ void FrameResource::createDepthResources()
 
 	image->createImage(swapChainExtent.width, swapChainExtent.height, 1, msaaSamples, depthFormat, VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depthImage, depthImageMemory, *device, *memory);
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depthImage, depthImageMemory, *device);
 
 	depthImageView = image->createImageView(depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1, *device);
 }

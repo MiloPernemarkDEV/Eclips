@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Device.h"
 #include "Image.h"
+#include "rendUtil.h"
 
 VkImageView Image::createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags,
 	uint32_t mipLevels, Device& device)
@@ -27,7 +28,7 @@ VkImageView Image::createImageView(VkImage image, VkFormat format, VkImageAspect
 }
 
 void Image::createImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format,
-	VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory, Device& device, Memory& memory)
+	VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory, Device& device)
 {
 	VkImageCreateInfo imageInfo{};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -54,7 +55,7 @@ void Image::createImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkS
 	VkMemoryAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	allocInfo.allocationSize = memRequirements.size;
-	allocInfo.memoryTypeIndex = memory.findMemoryType(memRequirements.memoryTypeBits, properties, device);
+	allocInfo.memoryTypeIndex = rendUtil::findMemoryType(memRequirements.memoryTypeBits, properties, device.getPhysicalDevice());
 
 	if (vkAllocateMemory(device.getLogicalDevice(), &allocInfo, nullptr, &imageMemory) != VK_SUCCESS) {
 		throw std::runtime_error("failed to allocate image memory!");
